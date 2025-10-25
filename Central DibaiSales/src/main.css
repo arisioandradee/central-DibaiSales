@@ -1,0 +1,89 @@
+/* Global styles - Theme, font, utilities, animations and global components */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%; /* #FFFFFF */
+    --foreground: 224 71.4% 4.1%; /* #0F172A */
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+
+    --primary: 244 81.3% 60.2%; /* #4F46E5 */
+    --primary-hover: 244 57.4% 42.9%; /* #3730A3 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 98%; /* #F8FAFC */
+    --secondary-foreground: 224 71.4% 4.1%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215 25% 51%; /* #64748B */
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 224 71.4% 4.1%;
+
+    --destructive: 0 84.2% 60.2%; /* #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 158 79.3% 43.3%; /* #10B981 */
+    --success-foreground: 0 0% 100%;
+
+    --border: 215 20.2% 90.2%; /* #E2E8F0 */
+    --input: 215 20.2% 90.2%;
+    --ring: 244 81.3% 60.2%;
+
+    --radius: 12px;
+  }
+
+  .dark {
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 98%;
+
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 244 81.3% 60.2%;
+    --primary-hover: 244 57.4% 42.9%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 158 79.3% 43.3%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 244 81.3% 60.2%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+}

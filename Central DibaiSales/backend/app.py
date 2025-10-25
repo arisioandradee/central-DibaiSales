@@ -1,0 +1,38 @@
+# ==================== IMPORTS =============================
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from converter_planilha import router as converter_router
+from extrair_email import router as email_router
+from extrair_numero import router as numero_router
+from speedio_assertiva import router as speedio_router
+from transcrever_audio import router as transcrever_router
+# =============================================================
+
+app = FastAPI(
+    title="Central Dibai Sales - Backend",
+    description="API unificada para conversão, extração e transcrição de dados.",
+    version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+        "http://127.0.0.1:8000",
+        "http://localhost:8080"
+    ],
+    allow_credentials=True, 
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(converter_router, prefix="/api", tags=["Conversor"])
+app.include_router(email_router, prefix="/api", tags=["Extrator de E-mails"])
+app.include_router(numero_router, prefix="/api", tags=["Extrator de Números"])
+app.include_router(speedio_router, prefix="/api", tags=["Speedio / Assertiva"])
+app.include_router(transcrever_router, prefix="/api", tags=["Transcritor de Áudios"])
