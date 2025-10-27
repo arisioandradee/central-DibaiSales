@@ -2,10 +2,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from converter_planilha import router as converter_router
-from extrair_email import router as email_router
-from extrair_numero import router as numero_router
-from speedio_assertiva import router as speedio_router
-from transcrever_audio import router as transcrever_router
+from backend.converter_planilha import router as converter_router
+from backend.extrair_email import router as email_router
+from backend.extrair_numero import router as numero_router
+from backend.speedio_assertiva import router as speedio_router
+from backend.transcrever_audio import router as transcrever_router
 # =============================================================
 
 app = FastAPI(
