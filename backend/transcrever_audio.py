@@ -1,6 +1,6 @@
 import os
 import io
-import time
+import time # Importação necessária para logs de tempo
 import shutil
 import requests
 import pandas as pd
@@ -18,9 +18,6 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
-    # Em produção (Render), esta checagem deve ocorrer via logs e não interromper
-    # o carregamento do módulo se a chave estiver configurada como variável de ambiente.
-    # Para garantir o sucesso, confira a chave no Render.
     pass 
 
 # ====================================================================
@@ -33,9 +30,8 @@ if GEMINI_API_KEY:
         client_gemini.models.list()
         print("[GLOBAL] Conexão com Gemini OK no startup.")
     except Exception as e:
-        # Se a chave for inválida, este erro acontecerá no startup do Render
         print(f"[GLOBAL ERROR] Falha ao conectar com Gemini. Chave inválida? Erro: {e}")
-        client_gemini = None # Garante que a variável é None se a conexão falhar
+        client_gemini = None
         
 
 # ------------------ CONFIGURAÇÕES ------------------
@@ -46,7 +42,6 @@ PASTA_TEMP = "audios_temp"
 router = APIRouter()
 
 # ------------------ CLASSE PDF ------------------
-# ... (NÃO ALTERADO)
 class PDF(FPDF):
     def header(self):
         self.set_fill_color(220, 220, 220)
@@ -138,21 +133,16 @@ class PDF(FPDF):
 
 
 # ------------------ FUNÇÕES AUXILIARES ------------------
-# ... (NÃO ALTERADO)
 def baixar_audio(link_gravacao, nome_arquivo_saida):
     try:
-        print(f"[DOWNLOAD] Baixando áudio: {link_gravacao}")
         r = requests.get(link_gravacao, stream=True, timeout=30)
         if r.status_code == 200:
             with open(nome_arquivo_saida, "wb") as f:
                 for chunk in r.iter_content(8192):
                     f.write(chunk)
-            print(f"[DOWNLOAD] Sucesso: {nome_arquivo_saida}")
             return True
-        print(f"[DOWNLOAD] Falha HTTP {r.status_code}")
         return f"Erro: HTTP {r.status_code}"
     except Exception as e:
-        print(f"[DOWNLOAD] Erro: {e}")
         return f"Erro de conexão: {str(e)}"
 
 def duracao_audio_segundos(caminho):
@@ -165,9 +155,16 @@ def duracao_audio_segundos(caminho):
         return 0
 
 def transcrever_audio(caminho):
-    # A variável client_gemini é agora global
     try:
+        # LOG 3: Começa o Upload para Gemini
+        start_upload = time.time()
+        print(f"[GEMINI] Iniciando upload...")
         uploaded_file = client_gemini.files.upload(file=caminho)
+        print(f"[GEMINI] Upload concluído em {time.time() - start_upload:.2f}s. File Name: {uploaded_file.name}")
+        
+        # LOG 4: Começa a Transcrição
+        start_generation = time.time()
+        print(f"[GEMINI] Iniciando geração de conteúdo (Transcrição)...")
         response = client_gemini.models.generate_content(
             model="gemini-2.5-flash",
             contents=[
@@ -180,21 +177,31 @@ def transcrever_audio(caminho):
                 uploaded_file
             ]
         )
+        print(f"[GEMINI] Geração de conteúdo concluída em {time.time() - start_generation:.2f}s.")
+        
         texto = response.text.strip()
         client_gemini.files.delete(name=uploaded_file.name)
+        print(f"[GEMINI] Arquivo temporário Gemini deletado.")
+        
         return texto
     except Exception as e:
-        print(f"[TRANSCRICAO] Erro: {e}")
+        print(f"[TRANSCRICAO] ERRO: {type(e).__name__}: {str(e)}")
+        # Tenta deletar o arquivo Gemini se o upload tiver sido concluído
+        try:
+             client_gemini.files.delete(name=uploaded_file.name)
+        except:
+             pass
         return f"ERRO na Transcrição: {type(e).__name__}: {str(e)}"
 
 # ------------------ ENDPOINT ------------------
 @router.post("/transcrever_audios")
 async def transcrever_audios_endpoint(file: UploadFile = File(...)):
-    print("[API] Recebendo arquivo Excel...")
+    print(f"[API] Recebendo arquivo Excel: {file.filename}")
     resultados_longos = []
     resultados_curtos_resumo = []
 
     os.makedirs(PASTA_TEMP, exist_ok=True)
+    start_total = time.time()
 
     try:
         # Checagem de segurança inicial
@@ -204,13 +211,12 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
         df.columns = df.columns.str.strip().str.upper()
-        print(f"[API] Excel carregado com {len(df)} linhas")
+        print(f"[API] Excel carregado com {len(df)} linhas para processamento.")
 
         colunas_requeridas = ["GRAVAÇÃO", "ID", COLUNA_ATENDENTE.upper()]
         if not all(col in df.columns for col in colunas_requeridas):
             raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
         
-        # REMOVIDA A INICIALIZAÇÃO DO CLIENTE GEMINI AQUI!
 
         # ------------------ PROCESSAMENTO DE LINHAS ------------------
         async def processar_linha(row):
@@ -218,23 +224,42 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             call_id = str(row["ID"])
             atendente_nome = str(row[COLUNA_ATENDENTE.upper()])
 
+            print(f"\n[INÍCIO] Processando ID: {call_id} | Atendente: {atendente_nome}")
+
             if not isinstance(link, str) or not link.startswith("http"):
-                print(f"[SKIP] Linha {row['ID']} inválida: {link}")
+                print(f"[SKIP] ID {call_id} inválida: {link}")
                 return None
 
             nome_arquivo = os.path.join(PASTA_TEMP, f"{call_id}.mp3")
             loop = asyncio.get_event_loop()
 
+            # LOG 1: Começa o Download
+            start_download = time.time()
+            print(f"  [DOWNLOAD] Iniciando para ID {call_id}...")
             resultado_download = await loop.run_in_executor(None, partial(baixar_audio, link, nome_arquivo))
+            
             if resultado_download is not True:
+                print(f"  [DOWNLOAD] Falha para ID {call_id}: {resultado_download}")
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": resultado_download}
+            
+            print(f"  [DOWNLOAD] Sucesso para ID {call_id} em {time.time() - start_download:.2f}s.")
 
             duracao = await loop.run_in_executor(None, partial(duracao_audio_segundos, nome_arquivo))
+            print(f"  [DURAÇÃO] ID {call_id}: {duracao:.2f}s.")
+            
             if duracao < 30:
                 os.remove(nome_arquivo)
+                print(f"  [SKIP] ID {call_id} - Áudio muito curto.")
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Áudio muito curto (<30s)"}
 
+            # LOG 2: Começa a Transcrição
+            start_transcription = time.time()
+            print(f"  [TRANSCRICAO] Iniciando transcrição (Upload + Geração)...")
             transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo))
+            
+            tempo_transcricao = time.time() - start_transcription
+            print(f"  [FIM] ID {call_id} - Transcrição concluída em {tempo_transcricao:.2f}s.")
+            
             os.remove(nome_arquivo)
 
             if transcricao_texto.startswith("ERRO na Transcrição"):
@@ -252,7 +277,12 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 return await processar_linha(row)
 
         tasks = [sem_task(row) for _, row in df.iterrows()]
+        print(f"\n[ASYNC] Iniciando processamento de {len(tasks)} tarefas com Semáforo=5...")
+        
+        # O BLOQUEIO REAL DO TIMEOUT ACONTECE AQUI SE FOR > 60s
         resultados = await asyncio.gather(*tasks)
+        
+        print(f"\n[ASYNC] Todos os processos concluídos. Tempo total de execução: {time.time() - start_total:.2f}s.")
 
         for r in resultados:
             if r is None:
@@ -288,6 +318,12 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio.pdf"}
         )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"[ERRO FATAL] Falha no endpoint: {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro interno no processamento: {str(e)}")
 
     finally:
         if os.path.exists(PASTA_TEMP):
