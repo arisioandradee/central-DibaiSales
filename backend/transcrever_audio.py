@@ -16,8 +16,27 @@ from functools import partial
 # ------------------ CARREGA .ENV ------------------
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY não encontrada. Verifique seu arquivo .env")
+    # Em produção (Render), esta checagem deve ocorrer via logs e não interromper
+    # o carregamento do módulo se a chave estiver configurada como variável de ambiente.
+    # Para garantir o sucesso, confira a chave no Render.
+    pass 
+
+# ====================================================================
+# CORREÇÃO CRÍTICA: Inicializa o cliente Gemini globalmente
+# ====================================================================
+client_gemini = None
+if GEMINI_API_KEY:
+    try:
+        client_gemini = genai.Client(api_key=GEMINI_API_KEY)
+        client_gemini.models.list()
+        print("[GLOBAL] Conexão com Gemini OK no startup.")
+    except Exception as e:
+        # Se a chave for inválida, este erro acontecerá no startup do Render
+        print(f"[GLOBAL ERROR] Falha ao conectar com Gemini. Chave inválida? Erro: {e}")
+        client_gemini = None # Garante que a variável é None se a conexão falhar
+        
 
 # ------------------ CONFIGURAÇÕES ------------------
 LIMITE_TRANSCRICAO_CURTA = 100
@@ -27,6 +46,7 @@ PASTA_TEMP = "audios_temp"
 router = APIRouter()
 
 # ------------------ CLASSE PDF ------------------
+# ... (NÃO ALTERADO)
 class PDF(FPDF):
     def header(self):
         self.set_fill_color(220, 220, 220)
@@ -116,7 +136,9 @@ class PDF(FPDF):
             self.cell(W_STATUS, final_height, "", 1, 1, "L")
             self.set_y(end_y)
 
+
 # ------------------ FUNÇÕES AUXILIARES ------------------
+# ... (NÃO ALTERADO)
 def baixar_audio(link_gravacao, nome_arquivo_saida):
     try:
         print(f"[DOWNLOAD] Baixando áudio: {link_gravacao}")
@@ -143,6 +165,7 @@ def duracao_audio_segundos(caminho):
         return 0
 
 def transcrever_audio(caminho):
+    # A variável client_gemini é agora global
     try:
         uploaded_file = client_gemini.files.upload(file=caminho)
         response = client_gemini.models.generate_content(
@@ -174,6 +197,10 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
     os.makedirs(PASTA_TEMP, exist_ok=True)
 
     try:
+        # Checagem de segurança inicial
+        if client_gemini is None:
+             raise HTTPException(status_code=503, detail="Serviço de Transcrição Indisponível (Erro de Configuração da API Key).")
+             
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
         df.columns = df.columns.str.strip().str.upper()
@@ -182,11 +209,8 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         colunas_requeridas = ["GRAVAÇÃO", "ID", COLUNA_ATENDENTE.upper()]
         if not all(col in df.columns for col in colunas_requeridas):
             raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
-
-        global client_gemini
-        client_gemini = genai.Client(api_key=GEMINI_API_KEY)
-        client_gemini.models.list()
-        print("[API] Conexão com Gemini OK")
+        
+        # REMOVIDA A INICIALIZAÇÃO DO CLIENTE GEMINI AQUI!
 
         # ------------------ PROCESSAMENTO DE LINHAS ------------------
         async def processar_linha(row):
