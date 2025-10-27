@@ -13,7 +13,6 @@
     "lint:fix": "oxlint src --fix",
     "format": "prettier --write --cache .",
     "preview": "vite preview",
-    "preinstall": "npx only-allow pnpm",
     "test": "vitest --run --cache",
     "test:watch": "vitest"
   },
