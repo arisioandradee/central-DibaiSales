@@ -17,7 +17,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://centraldibaisales.netlify.app/"
+        "https://centraldibaisales.netlify.app",
+        "https://central-dibaisales.onrender.com",
+        "http://localhost:3000" 
     ],
     allow_credentials=True, 
     allow_methods=["*"],
