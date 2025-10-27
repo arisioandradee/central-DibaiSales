@@ -1,7 +1,6 @@
 # ==================== IMPORTS =============================
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from converter_planilha import router as converter_router
 from backend.converter_planilha import router as converter_router
 from backend.extrair_email import router as email_router
 from backend.extrair_numero import router as numero_router
