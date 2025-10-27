@@ -8,7 +8,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from starlette.responses import StreamingResponse
 from fpdf import FPDF
 from mutagen import File as MutagenFile
-from google import genai
+import google.generativeai as genai
 from dotenv import load_dotenv
 import asyncio
 from functools import partial
