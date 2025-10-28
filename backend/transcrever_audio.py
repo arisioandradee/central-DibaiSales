@@ -266,18 +266,15 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 pdf.ln(2)
 
         # exporta PDF como bytes seguros (latin1 com replace)
-        pdf_bytes = pdf.output(dest='S')
-        if isinstance(pdf_bytes, str):
-            pdf_bytes = pdf_bytes.encode('latin1', errors='replace')
-        elif isinstance(pdf_bytes, bytes):
-            # ok
-            pass
-        else:
-            pdf_bytes = str(pdf_bytes).encode('latin1', errors='replace')
+        buffer = io.BytesIO()
+        pdf.output(buffer, dest='F')  # escreve o PDF binário diretamente
+        buffer.seek(0)
 
-        print("[PDF] PDF gerado com sucesso.")
-        return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf",
-                                headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio.pdf"})
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio.pdf"}
+        )
 
     except HTTPException as e:
         raise e
