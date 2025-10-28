@@ -13,6 +13,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import asyncio
 from functools import partial
+from pathlib import Path
 
 # ------------------ CARREGA .ENV ------------------
 load_dotenv()
@@ -61,12 +62,24 @@ def duracao_audio_segundos(caminho: str) -> float:
         print(f"[DURACAO] Erro ao calcular duração: {e}")
         return 0.0
 
+def transcrever_audio(caminho_arquivo: str) -> str:
+    """
+    Transcreve o áudio usando Gemini 1.5
+    """
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        audio_file = Path(caminho_arquivo)
+        response = model.generate_content([
+            {"mime_type": "audio/mp3", "data": audio_file.read_bytes()},
+            "Transcreva o áudio em texto."
+        ])
+        return response.text.strip()
+    except Exception as e:
+        return f"Erro na transcrição: {e}"
+
+# ------------------ ENDPOINT ------------------
 @router.post("/transcrever_audios")
 async def transcrever_audios_endpoint(file: UploadFile = File(...)):
-    """
-    Endpoint que transcreve áudios do Excel e gera PDF incremental.
-    Áudios curtos (<30s) são registrados em resumo separado.
-    """
     os.makedirs(PASTA_TEMP, exist_ok=True)
     sem = asyncio.Semaphore(SEMAFORO_CONC)
 
@@ -96,7 +109,10 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
 
         colunas_requeridas = ["GRAVAÇÃO", "ID", COLUNA_ATENDENTE.upper()]
         if not all(col in df.columns for col in colunas_requeridas):
-            raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
+            raise HTTPException(
+                status_code=400,
+                detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'."
+            )
 
         df = df.dropna(subset=["ID", "GRAVAÇÃO"])
         print(f"[API] Excel filtrado: {len(df)} linhas válidas.")
@@ -126,13 +142,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                     return
 
                 # Transcrição real usando Gemini
-                try:
-                    with open(nome_arquivo_local, "rb") as audio_file:
-                        resposta = genai.audio.transcribe(model="gpt-4o-mini-transcribe", file=audio_file)
-                        transcricao_texto = resposta.text.strip()
-                except Exception as e:
-                    resultados_curtos_resumo.append({"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": f"Erro na transcrição: {e}"})
-                    return
+                transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo_local))
 
                 # --- PDF incremental ---
                 pdf.add_page()
@@ -143,11 +153,10 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 pdf.multi_cell(largura_util, 6, "Transcrição:")
                 write_long_text(pdf, transcricao_texto)
 
-        # Processa todas as linhas em paralelo com limite de concorrência
         tasks = [processar_linha(row) for _, row in df.iterrows()]
         await asyncio.gather(*tasks)
 
-        # PDF com resumo de áudios curtos/falhas
+        # PDF resumo de áudios curtos/falhas
         if resultados_curtos_resumo:
             pdf.add_page()
             pdf.set_font("Helvetica", "B", 12)
