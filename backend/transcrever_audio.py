@@ -8,7 +8,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from starlette.responses import StreamingResponse
 from fpdf import FPDF
 from mutagen import File as MutagenFile
-import google.generativeai as genai  # Biblioteca correta para 0.7.2
+import google.generativeai as genai
 
 from dotenv import load_dotenv
 import asyncio
@@ -17,11 +17,9 @@ from functools import partial
 # ------------------ CARREGA .ENV ------------------
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY não encontrada nas variáveis de ambiente")
 
-# Configura a API globalmente
 genai.configure(api_key=GEMINI_API_KEY)
 print("[GLOBAL] Conexão com Gemini configurada com sucesso.")
 
@@ -29,6 +27,7 @@ print("[GLOBAL] Conexão com Gemini configurada com sucesso.")
 LIMITE_TRANSCRICAO_CURTA = 100
 COLUNA_ATENDENTE = "ATENDENTE"
 PASTA_TEMP = "audios_temp"
+FONTE_PDF = "fonts/DejaVuSans.ttf"  # ⚠️ Certifique-se de baixar essa fonte
 
 router = APIRouter()
 
@@ -74,8 +73,8 @@ def transcrever_audio(caminho):
 
         genai.files.delete(name=uploaded_file.name)
         print("[GEMINI] Arquivo temporário deletado.")
-
         return texto
+
     except Exception as e:
         print(f"[TRANSCRICAO] ERRO: {type(e).__name__}: {str(e)}")
         try:
@@ -107,22 +106,18 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'."
             )
 
-        # ------------------ PROCESSAMENTO DE LINHAS ------------------
         async def processar_linha(row):
             link = row["GRAVAÇÃO"]
             call_id = str(row["ID"])
             atendente_nome = str(row[COLUNA_ATENDENTE.upper()])
 
             print(f"\n[INÍCIO] Processando ID: {call_id} | Atendente: {atendente_nome}")
-
             if not isinstance(link, str) or not link.startswith("http"):
                 print(f"[SKIP] ID {call_id} inválido: {link}")
                 return None
 
             nome_arquivo = os.path.join(PASTA_TEMP, f"{call_id}.mp3")
             loop = asyncio.get_event_loop()
-
-            start_download = time.time()
             resultado_download = await loop.run_in_executor(None, partial(baixar_audio, link, nome_arquivo))
             if resultado_download is not True:
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": resultado_download}
@@ -144,12 +139,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 return {"LONGO": {"ID": call_id, "ATENDENTE": atendente_nome, "LINK": link, "TRANSCRICAO": transcricao_texto}}
 
         SEMAFORO = asyncio.Semaphore(5)
-
-        async def sem_task(row):
-            async with SEMAFORO:
-                return await processar_linha(row)
-
-        tasks = [sem_task(row) for _, row in df.iterrows()]
+        tasks = [asyncio.create_task(processar_linha(row)) for _, row in df.iterrows()]
         resultados = await asyncio.gather(*tasks)
 
         for r in resultados:
@@ -160,19 +150,21 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             else:
                 resultados_curtos_resumo.append(r)
 
-        # ---- Geração do PDF ----
+        # ---- Geração do PDF com Unicode ----
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_font("DejaVu", "", FONTE_PDF, uni=True)
+        pdf.set_font("DejaVu", size=12)
 
         for item in resultados_longos:
             pdf.add_page()
-            pdf.set_font("Arial", size=12)  # ⚠️ CORREÇÃO: define a fonte
+            pdf.set_font("DejaVu", size=12)
             pdf.multi_cell(0, 5, f"ID: {item['ID']}\nAtendente: {item['ATENDENTE']}\nLink: {item['LINK']}\n\nTranscrição:\n{item['TRANSCRICAO']}")
 
         if resultados_curtos_resumo:
             pdf.add_page()
-            pdf.set_font("Arial", size=12)  # ⚠️ CORREÇÃO: define a fonte
+            pdf.set_font("DejaVu", size=12)
             pdf.multi_cell(0, 5, "Resumo de transcrições curtas:\n")
             for r in resultados_curtos_resumo:
                 pdf.multi_cell(0, 5, f"ID: {r['ID']} | Atendente: {r['ATENDENTE']} | Status: {r['STATUS']}")
