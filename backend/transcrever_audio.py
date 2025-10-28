@@ -19,10 +19,12 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY não encontrada. Verifique seu arquivo .env")
 
+# CORREÇÃO 1A: Inicializa o Client globalmente para garantir o acesso a client_gemini.files
 try:
-    genai.configure(api_key=GEMINI_API_KEY)
+    client_gemini = genai.Client(api_key=GEMINI_API_KEY)
+    print("[API] Conexão com Gemini OK (Client Inicializado)")
 except AttributeError:
-    pass 
+    raise RuntimeError("Erro ao inicializar genai.Client. Verifique a versão do SDK.")
     
 # ------------------ CONFIGURAÇÕES ------------------
 LIMITE_TRANSCRICAO_CURTA = 100
@@ -32,6 +34,7 @@ PASTA_TEMP = "audios_temp"
 router = APIRouter()
 
 # ------------------ CLASSE PDF ------------------
+# (CÓDIGO DA CLASSE PDF MANTIDO SEM ALTERAÇÕES)
 class PDF(FPDF):
     def header(self):
         self.set_fill_color(220, 220, 220)
@@ -147,13 +150,15 @@ def duracao_audio_segundos(caminho):
     except Exception:
         return 0
 
+# CORREÇÃO 1B: Usa o objeto client_gemini inicializado globalmente
 def transcrever_audio(caminho):
+    global client_gemini
     try:
-        # Acesso direto às funcionalidades de arquivo do módulo genai
-        uploaded_file = genai.files.upload(file=caminho)
+        # Acesso às funcionalidades de arquivo através do objeto Client
+        uploaded_file = client_gemini.files.upload(file=caminho)
         
-        # Acesso direto à geração de conteúdo do módulo genai
-        response = genai.generate_content(
+        # Acesso à geração de conteúdo através do objeto Client
+        response = client_gemini.models.generate_content(
             model="gemini-2.5-flash",
             contents=[
                 f"""
@@ -167,8 +172,8 @@ def transcrever_audio(caminho):
         )
         texto = response.text.strip()
         
-        # Acesso direto à exclusão de arquivo do módulo genai
-        genai.files.delete(name=uploaded_file.name)
+        # Acesso à exclusão de arquivo através do objeto Client
+        client_gemini.files.delete(name=uploaded_file.name)
         
         return texto
     except Exception as e:
@@ -194,8 +199,8 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if not all(col in df.columns for col in colunas_requeridas):
             raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
 
-        print("[API] Conexão com Gemini OK (Configuração Global)")
-
+        # Conexão com Gemini já foi feita globalmente
+        
         # ------------------ PROCESSAMENTO DE LINHAS ------------------
         async def processar_linha(row):
             link = row["GRAVAÇÃO"]
@@ -203,6 +208,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             atendente_nome = str(row[COLUNA_ATENDENTE.upper()])
 
             if not isinstance(link, str) or not link.startswith("http"):
+                # Captura linhas SKIPPED com 'nan' (NaNs)
                 print(f"[SKIP] Linha {row['ID']} inválida: {link}")
                 return None
 
@@ -218,9 +224,11 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 os.remove(nome_arquivo)
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Áudio muito curto (<30s)"}
 
-            # A função transcrever_audio agora usa as funções globais do SDK
             transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo))
-            os.remove(nome_arquivo)
+            
+            # Se a transcrição falhou, o arquivo temporário pode não existir, então o removemos apenas se existir
+            if os.path.exists(nome_arquivo):
+                os.remove(nome_arquivo)
 
             if transcricao_texto.startswith("ERRO na Transcrição"):
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": transcricao_texto}
@@ -265,7 +273,8 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if resultados_curtos_resumo:
             pdf.write_summary_block(resultados_curtos_resumo)
 
-        pdf_output = pdf.output(dest='S').encode('latin1')
+        # CORREÇÃO 2: Remove .encode() pois pdf.output(dest='S') já retorna bytes/bytearray no Python 3.
+        pdf_output = pdf.output(dest='S')
         print("[PDF] PDF gerado com sucesso!")
 
         return StreamingResponse(
