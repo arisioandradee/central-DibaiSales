@@ -158,30 +158,23 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             else:
                 resultados_curtos_resumo.append(r)
 
-        # ---- Geração do PDF com fpdf2 ----
+        # ---- Geração do PDF (Arial interno do fpdf2) ----
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=15)
-
-        # Adiciona fonte TTF Unicode (acentuação)
-        font_path = os.path.join(os.path.dirname(__file__), "fonts", "DejaVuSans.ttf")
-        if not os.path.exists(font_path):
-            raise RuntimeError(f"Arquivo de fonte não encontrado: {font_path}")
-        pdf.add_font("DejaVu", "", font_path, uni=True)
+        pdf.set_font("Arial", size=12)  # Arial interno, sem TTF externa
 
         for item in resultados_longos:
             pdf.add_page()
-            pdf.set_font("DejaVu", "", 12)
             pdf.multi_cell(0, 5, f"ID: {item['ID']}\nAtendente: {item['ATENDENTE']}\nLink: {item['LINK']}\n\nTranscrição:\n{item['TRANSCRICAO']}")
 
         if resultados_curtos_resumo:
             pdf.add_page()
-            pdf.set_font("DejaVu", "", 12)
             pdf.multi_cell(0, 5, "Resumo de transcrições curtas:\n")
             for r in resultados_curtos_resumo:
                 pdf.multi_cell(0, 5, f"ID: {r['ID']} | Atendente: {r['ATENDENTE']} | Status: {r['STATUS']}")
 
-        pdf_output = pdf.output(dest='S').encode('latin1')
+        pdf_output = pdf.output(dest='S').encode('latin1', errors='replace')
 
         return StreamingResponse(
             io.BytesIO(pdf_output),
