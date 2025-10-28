@@ -1,42 +1,50 @@
+# backend/transcrever_audio_debug.py
 import os
 import io
+import time
 import shutil
-import textwrap
 import requests
+import textwrap
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from starlette.responses import StreamingResponse
 from fpdf import FPDF
 from mutagen import File as MutagenFile
-import asyncio
-from functools import partial
 import google.generativeai as genai
 from dotenv import load_dotenv
+import asyncio
+from functools import partial
 
-# ------------------ CONFIGURAÇÕES ------------------
+# ------------------ CARREGA .ENV ------------------
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY não encontrada")
+    raise RuntimeError("GEMINI_API_KEY não encontrada nas variáveis de ambiente")
 
-genai.configure(api_key=GEMINI_API_KEY)
+# ------------------ CONFIGURA GEMINI ------------------
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+    print("[GEMINI] Configurado com sucesso.")
+except Exception as e:
+    raise RuntimeError(f"Erro ao configurar Gemini: {e}")
 
+# ------------------ CONFIGURAÇÕES ------------------
+COLUNA_ATENDENTE = "ATENDENTE"
 PASTA_TEMP = "audios_temp"
 SEMAFORO_CONC = 2
-LIMITE_TRANSCRICAO_CURTA = 100
-COLUNA_ATENDENTE = "ATENDENTE"
-LARGURA_UTIL = 180
 
 router = APIRouter()
 
-# ------------------ AUXILIARES ------------------
+# ------------------ FUNÇÕES AUXILIARES ------------------
 def baixar_audio(url: str, caminho: str):
     try:
         r = requests.get(url, stream=True, timeout=30)
         if r.status_code != 200:
-            return f"Erro HTTP {r.status_code}"
+            return f"Erro no download: HTTP {r.status_code}"
         with open(caminho, "wb") as f:
             shutil.copyfileobj(r.raw, f)
+        tamanho = os.path.getsize(caminho)
+        print(f"[DOWNLOAD] Tamanho do arquivo {caminho}: {tamanho} bytes")
         return True
     except Exception as e:
         return f"Exceção download: {str(e)}"
@@ -44,141 +52,127 @@ def baixar_audio(url: str, caminho: str):
 def duracao_audio_segundos(caminho: str) -> float:
     try:
         audio = MutagenFile(caminho)
-        return float(audio.info.length) if audio and hasattr(audio, "info") else 0.0
-    except:
+        if audio is None or not hasattr(audio, "info"):
+            print(f"[DURACAO] Arquivo inválido ou não suportado: {caminho}")
+            return 0.0
+        dur = float(audio.info.length)
+        print(f"[DURACAO] Duração detectada: {dur:.2f}s para {caminho}")
+        return dur
+    except Exception as e:
+        print(f"[DURACAO] Erro ao calcular duração: {e}")
         return 0.0
 
-def transcrever_audio_local(caminho: str) -> str:
-    try:
-        uploaded = genai.upload_file(path=caminho)
-        modelo = genai.GenerativeModel("gemini-1.5")  # use um modelo válido
-
-        prompt = (
-            "Transcreva o áudio completo em Português do Brasil.\n"
-            "Identifique os locutores pelo nome se possível.\n"
-            "Formate como diálogo: Nome: fala do participante.\n"
-            "Evite linhas longas e remova espaços extras.\n"
-        )
-
-        response = modelo.generate_content([prompt, uploaded])
-        texto = getattr(response, "text", "") or str(getattr(getattr(response, "result", {}), "output", "")).strip()
-
-        try:
-            if hasattr(uploaded, "name"):
-                genai.delete_file(name=uploaded.name)
-        except:
-            pass
-
-        return texto if texto else "ERRO na Transcrição: nenhum texto retornado pelo modelo."
-    except Exception as e:
-        return f"ERRO na Transcrição: {type(e).__name__}: {str(e)}"
-
-def write_long_text(p: FPDF, text: str, width=LARGURA_UTIL, line_h=6):
-    paragraphs = text.splitlines() if text else [""]
-    for para in paragraphs:
-        if not para:
-            p.ln(2)
-            continue
-        for bloco in textwrap.wrap(para, width=500):
-            p.multi_cell(width, line_h, bloco)
-        p.ln(2)
-
 # ------------------ ENDPOINT ------------------
-@router.post("/transcrever_audios")
+@router.post("/transcrever_audios_debug")
 async def transcrever_audios_endpoint(file: UploadFile = File(...)):
-    os.makedirs(PASTA_TEMP, exist_ok=True)
     resultados_longos = []
     resultados_curtos_resumo = []
+
+    os.makedirs(PASTA_TEMP, exist_ok=True)
     sem = asyncio.Semaphore(SEMAFORO_CONC)
 
     try:
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
         df.columns = df.columns.str.strip().str.upper()
+
         colunas_requeridas = ["GRAVAÇÃO", "ID", COLUNA_ATENDENTE.upper()]
         if not all(col in df.columns for col in colunas_requeridas):
-            raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas {colunas_requeridas}")
+            raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
 
         df = df.dropna(subset=["ID", "GRAVAÇÃO"])
+        print(f"[API] Excel filtrado: {len(df)} linhas válidas.")
 
         async def processar_linha(row):
             link = row["GRAVAÇÃO"]
             call_id = str(row["ID"]).strip()
             atendente_nome = str(row[COLUNA_ATENDENTE.upper()]).strip()
+
+            print(f"[INÍCIO] Processando ID: {call_id} | Atendente: {atendente_nome}")
+
+            if not isinstance(link, str) or not link.startswith("http"):
+                print(f"[SKIP] ID {call_id} inválido: {link}")
+                return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Link inválido"}
+
             nome_arquivo_local = os.path.join(PASTA_TEMP, f"{call_id}.mp3")
             loop = asyncio.get_event_loop()
 
             resultado_download = await loop.run_in_executor(None, partial(baixar_audio, link, nome_arquivo_local))
             if resultado_download is not True:
+                print(f"[DOWNLOAD] Falhou para ID {call_id}: {resultado_download}")
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": resultado_download}
 
             dur = await loop.run_in_executor(None, partial(duracao_audio_segundos, nome_arquivo_local))
+
+            # PARA TESTE: não descarta áudios curtos
             if dur < 30:
-                os.remove(nome_arquivo_local)
-                return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Áudio muito curto (<30s)"}
+                print(f"[TESTE] Áudio detectado como curto, mas será processado mesmo assim ({dur:.2f}s)")
 
-            async with sem:
-                transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio_local, nome_arquivo_local))
+            # --- Aqui você poderia chamar transcrição real ---
+            # para teste, simulamos uma transcrição
+            transcricao_texto = f"Transcrição simulada do ID {call_id}, duração: {dur:.2f}s"
 
-            os.remove(nome_arquivo_local)
-            if transcricao_texto.startswith("ERRO na Transcrição"):
-                return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": transcricao_texto}
-            elif len(transcricao_texto) < LIMITE_TRANSCRICAO_CURTA:
-                resumo_curto = transcricao_texto.replace('\n', ' ').strip()[:120] + "..."
-                return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": f"CURTA: {resumo_curto}"}
+            if dur >= 30:
+                resultados_longos.append({"ID": call_id, "ATENDENTE": atendente_nome, "LINK": link, "TRANSCRICAO": transcricao_texto})
             else:
-                return {"LONGO": {"ID": call_id, "ATENDENTE": atendente_nome, "LINK": link, "TRANSCRICAO": transcricao_texto}}
+                resultados_curtos_resumo.append({"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": f"Áudio muito curto ({dur:.2f}s)"})
+
+            return True
 
         tasks = [processar_linha(row) for _, row in df.iterrows()]
-        resultados = await asyncio.gather(*tasks)
+        print(f"[ASYNC] Iniciando processamento de {len(tasks)} tarefas...")
+        await asyncio.gather(*tasks)
 
-        for r in resultados:
-            if r is None:
-                continue
-            if "LONGO" in r:
-                resultados_longos.append(r["LONGO"])
-            else:
-                resultados_curtos_resumo.append(r)
-
-        # Geração do PDF
+        # ---- GERAÇÃO DO PDF ----
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.set_font("Helvetica", size=11)
+        largura_util = 180
+
+        def write_long_text(p: FPDF, text: str, width=largura_util, line_h=6):
+            paragraphs = text.splitlines() if text else [""]
+            for para in paragraphs:
+                if not para:
+                    p.ln(2)
+                    continue
+                for bloco in textwrap.wrap(para, width=500):
+                    p.multi_cell(width, line_h, bloco)
+                p.ln(2)
 
         for item in resultados_longos:
             pdf.add_page()
-            pdf.multi_cell(LARGURA_UTIL, 6, f"ID: {item['ID']}")
-            pdf.multi_cell(LARGURA_UTIL, 6, f"Atendente: {item['ATENDENTE']}")
-            pdf.multi_cell(LARGURA_UTIL, 6, f"Link: {item['LINK']}")
+            pdf.multi_cell(largura_util, 6, f"ID: {item['ID']}")
+            pdf.multi_cell(largura_util, 6, f"Atendente: {item['ATENDENTE']}")
+            pdf.multi_cell(largura_util, 6, f"Link: {item['LINK']}")
             pdf.ln(4)
-            pdf.multi_cell(LARGURA_UTIL, 6, "Transcrição:")
+            pdf.multi_cell(largura_util, 6, "Transcrição:")
             write_long_text(pdf, item.get("TRANSCRICAO", ""))
 
         if resultados_curtos_resumo:
             pdf.add_page()
             pdf.set_font("Helvetica", "B", 12)
-            pdf.multi_cell(LARGURA_UTIL, 8, "Resumo de transcrições curtas / falhas:\n")
+            pdf.multi_cell(largura_util, 8, "Resumo de transcrições curtas / falhas:\n")
             pdf.set_font("Helvetica", size=11)
             for r in resultados_curtos_resumo:
                 texto_curto = f"ID: {r['ID']} | Atendente: {r['ATENDENTE']} | Status: {r['STATUS']}"
-                pdf.multi_cell(LARGURA_UTIL, 6, texto_curto)
+                pdf.multi_cell(largura_util, 6, texto_curto)
                 pdf.ln(2)
 
-        pdf_bytes = pdf.output(dest='S')
+        buffer = io.BytesIO()
+        pdf.output(buffer, dest='F')
+        buffer.seek(0)
+
         return StreamingResponse(
-            io.BytesIO(pdf_bytes),
+            buffer,
             media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio.pdf"}
+            headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio_debug.pdf"}
         )
 
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro interno: {e}")
     finally:
         try:
             if os.path.exists(PASTA_TEMP):
-                shutil.rmtree(PASTA_TEMP, ignore_errors=True)
-        except:
-            pass
+                shutil.rmtree(PASTA_TEMP)
+                print("[TEMP] Pasta temporária removida")
+        except Exception as ee:
+            print(f"[TEMP] Falha ao remover pasta temporária: {ee}")
