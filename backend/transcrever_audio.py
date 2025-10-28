@@ -13,12 +13,17 @@ from dotenv import load_dotenv
 import asyncio
 from functools import partial
 
-# ------------------ CARREGA .ENV ------------------
+# ------------------ CARREGA .ENV E CONFIGURA GEMINI ------------------
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY não encontrada. Verifique seu arquivo .env")
 
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+except AttributeError:
+    pass 
+    
 # ------------------ CONFIGURAÇÕES ------------------
 LIMITE_TRANSCRICAO_CURTA = 100
 COLUNA_ATENDENTE = "ATENDENTE"
@@ -144,8 +149,11 @@ def duracao_audio_segundos(caminho):
 
 def transcrever_audio(caminho):
     try:
-        uploaded_file = client_gemini.files.upload(file=caminho)
-        response = client_gemini.models.generate_content(
+        # Acesso direto às funcionalidades de arquivo do módulo genai
+        uploaded_file = genai.files.upload(file=caminho)
+        
+        # Acesso direto à geração de conteúdo do módulo genai
+        response = genai.generate_content(
             model="gemini-2.5-flash",
             contents=[
                 f"""
@@ -158,7 +166,10 @@ def transcrever_audio(caminho):
             ]
         )
         texto = response.text.strip()
-        client_gemini.files.delete(name=uploaded_file.name)
+        
+        # Acesso direto à exclusão de arquivo do módulo genai
+        genai.files.delete(name=uploaded_file.name)
+        
         return texto
     except Exception as e:
         print(f"[TRANSCRICAO] Erro: {e}")
@@ -183,10 +194,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if not all(col in df.columns for col in colunas_requeridas):
             raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
 
-        global client_gemini
-        client_gemini = genai.Client(api_key=GEMINI_API_KEY)
-        client_gemini.models.list()
-        print("[API] Conexão com Gemini OK")
+        print("[API] Conexão com Gemini OK (Configuração Global)")
 
         # ------------------ PROCESSAMENTO DE LINHAS ------------------
         async def processar_linha(row):
@@ -210,6 +218,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 os.remove(nome_arquivo)
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Áudio muito curto (<30s)"}
 
+            # A função transcrever_audio agora usa as funções globais do SDK
             transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo))
             os.remove(nome_arquivo)
 
