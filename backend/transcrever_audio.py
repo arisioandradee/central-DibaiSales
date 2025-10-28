@@ -165,7 +165,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 pdf.multi_cell(LARGURA_UTIL, 6, texto_curto)
                 pdf.ln(2)
 
-        pdf_bytes = pdf.output(dest='S').encode('latin1')
+        pdf_bytes = pdf.output(dest='S')
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",
