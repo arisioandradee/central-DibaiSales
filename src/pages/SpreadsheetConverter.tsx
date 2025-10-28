@@ -13,7 +13,6 @@ import { ENDPOINTS } from '../api/endpoints'
 
 const FUNNELS = [
   'Todos os funis',
-  'Funil de Vendas',
   'Dibai Sales',
   'Data Car',
   "Let's Perform",
@@ -28,15 +27,11 @@ const FUNNELS = [
 ]
 
 const USERS = [
-  'Eu', 'Bruno', 'Camila', 'Eliana', 'Jorge Boruszewsky',
-  'Marcio', 'Matheus Dibai', 'Rafaella', 'Barbara Cristina',
-  'Carlos', 'Charles', 'Charles Anderson', 'Erika', 'Ingrid Maiara',
-  'Maria', 'Gabriella'
+  'Eu', 'Bruno', 'Eliana', 'Jorge Boruszewsky',
+  'Marcio', 'Matheus Dibai', 'Rafaella', 'Gabriella'
 ]
 
-// Componente Card
 const Card = ({ title, description, children }: any) => (
-  // Mantido dark:bg-gray-800 para contraste com o fundo principal, agora mais escuro
   <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-xl shadow-2xl dark:shadow-black/20 border border-gray-200 dark:border-gray-700 p-6 w-full transition-colors duration-300">
     <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-4">
       <h2 className="text-2xl font-bold">{title}</h2>
@@ -46,7 +41,6 @@ const Card = ({ title, description, children }: any) => (
   </div>
 )
 
-// Componente Alert
 const Alert = ({ variant, title, description, icon: Icon }: any) => {
   const base = "p-4 rounded-lg shadow-md flex items-start space-x-3"
   const isError = variant === "destructive"
