@@ -50,13 +50,11 @@ def duracao_audio_segundos(caminho):
 
 def transcrever_audio(caminho):
     try:
-        # Upload do arquivo
         start_upload = time.time()
         print(f"[GEMINI] Iniciando upload: {caminho}")
         uploaded_file = genai.files.upload(file=caminho)
         print(f"[GEMINI] Upload concluído em {time.time() - start_upload:.2f}s. File: {uploaded_file.name}")
 
-        # Geração de conteúdo
         start_gen = time.time()
         print("[GEMINI] Iniciando transcrição...")
         response = genai.models.generate_content(
@@ -74,7 +72,6 @@ def transcrever_audio(caminho):
         print(f"[GEMINI] Transcrição concluída em {time.time() - start_gen:.2f}s.")
         texto = response.text.strip()
 
-        # Remove arquivo temporário no Gemini
         genai.files.delete(name=uploaded_file.name)
         print("[GEMINI] Arquivo temporário deletado.")
 
@@ -170,10 +167,12 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
 
         for item in resultados_longos:
             pdf.add_page()
+            pdf.set_font("Arial", size=12)  # ⚠️ CORREÇÃO: define a fonte
             pdf.multi_cell(0, 5, f"ID: {item['ID']}\nAtendente: {item['ATENDENTE']}\nLink: {item['LINK']}\n\nTranscrição:\n{item['TRANSCRICAO']}")
 
         if resultados_curtos_resumo:
             pdf.add_page()
+            pdf.set_font("Arial", size=12)  # ⚠️ CORREÇÃO: define a fonte
             pdf.multi_cell(0, 5, "Resumo de transcrições curtas:\n")
             for r in resultados_curtos_resumo:
                 pdf.multi_cell(0, 5, f"ID: {r['ID']} | Atendente: {r['ATENDENTE']} | Status: {r['STATUS']}")
