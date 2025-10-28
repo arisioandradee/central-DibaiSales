@@ -19,7 +19,9 @@ app.add_middleware(
     allow_origins=[
         "https://centraldibaisales.netlify.app",
         "https://central-dibaisales.onrender.com",
-        "http://localhost:3000" 
+        "http://localhost:3000",
+        "https://server.dibaisales.com.br",
+        "http://server.dibaisales.com.br"
     ],
     allow_credentials=True, 
     allow_methods=["*"],
