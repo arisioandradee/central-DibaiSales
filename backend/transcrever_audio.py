@@ -1,4 +1,3 @@
-# backend/transcrever_audio_debug.py
 import os
 import io
 import time
@@ -63,7 +62,7 @@ def duracao_audio_segundos(caminho: str) -> float:
         return 0.0
 
 # ------------------ ENDPOINT ------------------
-@router.post("/transcrever_audios_debug")
+@router.post("/transcrever_audios")
 async def transcrever_audios_endpoint(file: UploadFile = File(...)):
     resultados_longos = []
     resultados_curtos_resumo = []
@@ -104,12 +103,8 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
 
             dur = await loop.run_in_executor(None, partial(duracao_audio_segundos, nome_arquivo_local))
 
-            # PARA TESTE: não descarta áudios curtos
             if dur < 30:
                 print(f"[TESTE] Áudio detectado como curto, mas será processado mesmo assim ({dur:.2f}s)")
-
-            # --- Aqui você poderia chamar transcrição real ---
-            # para teste, simulamos uma transcrição
             transcricao_texto = f"Transcrição simulada do ID {call_id}, duração: {dur:.2f}s"
 
             if dur >= 30:
@@ -166,7 +161,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio_debug.pdf"}
+            headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio.pdf"}
         )
 
     finally:
