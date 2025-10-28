@@ -17,7 +17,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://centraldibaisales.netlify.app",
+        "https://central-dibai-sales.vercel.app",
         "https://central-dibaisales.onrender.com",
         "http://localhost:3000",
         "https://server.dibaisales.com.br",
