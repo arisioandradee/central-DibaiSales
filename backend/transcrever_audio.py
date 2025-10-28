@@ -9,9 +9,11 @@ from starlette.responses import StreamingResponse
 from fpdf import FPDF
 from mutagen import File as MutagenFile
 import google.generativeai as genai
+# Não é necessário importar Client de forma explícita com a versão 0.7.2
 from dotenv import load_dotenv
 import asyncio
 from functools import partial
+from typing import Optional
 
 # ------------------ CARREGA .ENV E CONFIGURA GEMINI ------------------
 load_dotenv()
@@ -19,13 +21,21 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY não encontrada. Verifique seu arquivo .env")
 
-# CORREÇÃO 1A: Inicializa o Client globalmente para garantir o acesso a client_gemini.files
+# CORREÇÃO: Inicializa o Client no escopo global. 
+# Se o erro persistir, o problema é na variável de ambiente GEMINI_API_KEY ou permissões de rede.
+client_gemini: Optional[genai.Client] = None
 try:
+    # A classe Client é acessível diretamente com a versão 0.7.2
     client_gemini = genai.Client(api_key=GEMINI_API_KEY)
-    print("[API] Conexão com Gemini OK (Client Inicializado)")
-except AttributeError:
-    raise RuntimeError("Erro ao inicializar genai.Client. Verifique a versão do SDK.")
-    
+    print("[API] Conexão com Gemini OK (Client Inicializado Globalmente)")
+except Exception as e:
+    # O erro agora será propagado se a chave for inválida
+    # ou se houver um problema de conexão/SDK não relacionado ao código.
+    print(f"[ERRO FATAL STARTUP] Falha ao inicializar genai.Client: {e}")
+    # Você pode optar por levantar o erro ou apenas continuar com client_gemini = None
+    # No caso de um erro fatal na startup, é melhor levantar:
+    raise RuntimeError(f"Erro fatal ao inicializar o Gemini Client: {e}. Verifique sua GEMINI_API_KEY.")
+
 # ------------------ CONFIGURAÇÕES ------------------
 LIMITE_TRANSCRICAO_CURTA = 100
 COLUNA_ATENDENTE = "ATENDENTE"
@@ -150,15 +160,13 @@ def duracao_audio_segundos(caminho):
     except Exception:
         return 0
 
-# CORREÇÃO 1B: Usa o objeto client_gemini inicializado globalmente
-def transcrever_audio(caminho):
-    global client_gemini
+# CORREÇÃO: Transfere o client_gemini como argumento, removendo a necessidade de 'global' dentro do executor.
+def transcrever_audio(caminho, gemini_client: genai.Client):
     try:
-        # Acesso às funcionalidades de arquivo através do objeto Client
-        uploaded_file = client_gemini.files.upload(file=caminho)
+        # Usa o objeto Client recebido por argumento
+        uploaded_file = gemini_client.files.upload(file=caminho)
         
-        # Acesso à geração de conteúdo através do objeto Client
-        response = client_gemini.models.generate_content(
+        response = gemini_client.models.generate_content(
             model="gemini-2.5-flash",
             contents=[
                 f"""
@@ -172,8 +180,7 @@ def transcrever_audio(caminho):
         )
         texto = response.text.strip()
         
-        # Acesso à exclusão de arquivo através do objeto Client
-        client_gemini.files.delete(name=uploaded_file.name)
+        gemini_client.files.delete(name=uploaded_file.name)
         
         return texto
     except Exception as e:
@@ -187,6 +194,10 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
     resultados_longos = []
     resultados_curtos_resumo = []
 
+    # Se a inicialização global falhou, levante a exceção aqui
+    if client_gemini is None:
+        raise HTTPException(status_code=503, detail="O serviço de transcrição (Gemini) não pôde ser inicializado.")
+
     os.makedirs(PASTA_TEMP, exist_ok=True)
 
     try:
@@ -199,8 +210,6 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if not all(col in df.columns for col in colunas_requeridas):
             raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
 
-        # Conexão com Gemini já foi feita globalmente
-        
         # ------------------ PROCESSAMENTO DE LINHAS ------------------
         async def processar_linha(row):
             link = row["GRAVAÇÃO"]
@@ -208,7 +217,6 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             atendente_nome = str(row[COLUNA_ATENDENTE.upper()])
 
             if not isinstance(link, str) or not link.startswith("http"):
-                # Captura linhas SKIPPED com 'nan' (NaNs)
                 print(f"[SKIP] Linha {row['ID']} inválida: {link}")
                 return None
 
@@ -224,9 +232,12 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 os.remove(nome_arquivo)
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Áudio muito curto (<30s)"}
 
-            transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo))
+            # AQUI PASSAMOS O client_gemini como argumento na chamada parcial
+            transcricao_texto = await loop.run_in_executor(
+                None, 
+                partial(transcrever_audio, nome_arquivo, client_gemini)
+            )
             
-            # Se a transcrição falhou, o arquivo temporário pode não existir, então o removemos apenas se existir
             if os.path.exists(nome_arquivo):
                 os.remove(nome_arquivo)
 
@@ -273,7 +284,6 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if resultados_curtos_resumo:
             pdf.write_summary_block(resultados_curtos_resumo)
 
-        # CORREÇÃO 2: Remove .encode() pois pdf.output(dest='S') já retorna bytes/bytearray no Python 3.
         pdf_output = pdf.output(dest='S')
         print("[PDF] PDF gerado com sucesso!")
 
