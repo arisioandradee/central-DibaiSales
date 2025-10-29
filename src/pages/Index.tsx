@@ -120,7 +120,7 @@ export default function Index() {
               description: 'Converta e prepare planilhas de consulta da Speedio para a Assertiva.',
               icon: Construction,
               actions: [
-                { to: '#', text: 'Em Ajustes', variant: 'secondary', disabled: true },
+                { to: '#', text: 'Em Ajustes', icon: ArrowRight, variant: 'secondary', disabled: true },
               ],
               isDisabled: true, // Card desabilitado
               cardBorderColor: 'border-orange-500/50', 
@@ -131,7 +131,7 @@ export default function Index() {
               description: 'Acesse a plataforma do nosso agente de ligações',
               icon: Construction,
               actions: [
-                { to: '#', text: 'Em desenvolvimento', variant: 'secondary', disabled: true },
+                { to: '#', text: 'Em Ajustes', icon: ArrowRight, variant: 'secondary', disabled: true },
               ],
               isDisabled: true,
             },
