@@ -20,7 +20,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY não encontrada. Verifique seu arquivo .env")
 
-# Configure Gemini (google.generativeai)
+# Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 print("[API] Conexão com Gemini OK")
 
@@ -72,7 +72,7 @@ class PDF(FPDF):
         self.cell(W_STATUS, LINE_HEIGHT, "STATUS / RESUMO", 1, 1, "C", fill=True)
         self.set_font("Arial", "", 9)
         self.set_text_color(0, 0, 0)
-        
+
     def write_summary_block(self, curtas: list[dict]):
         print("[PDF] Adicionando resumo de chamadas curtas/falhas")
         self.add_page()
@@ -85,26 +85,26 @@ class PDF(FPDF):
         W_ATENDENTE = 40
         W_STATUS = 125
         LINE_HEIGHT = 6
-        
+
         self.set_fill_color(240, 240, 240)
         self._draw_summary_header(W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT)
-        
-        PB_TRIGGER = self.page_break_trigger 
-        MIN_ROW_HEIGHT = LINE_HEIGHT * 3 
+
+        PB_TRIGGER = self.page_break_trigger
+        MIN_ROW_HEIGHT = LINE_HEIGHT * 3
 
         for item in curtas:
             status_text = item["STATUS"]
             if self.get_y() + MIN_ROW_HEIGHT > PB_TRIGGER:
                 self.add_page()
                 self._draw_summary_header(W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT)
-                
+
             start_y = self.get_y()
             start_x = self.get_x()
 
             self.set_xy(start_x + W_ID + W_ATENDENTE, start_y)
             self.multi_cell(W_STATUS, LINE_HEIGHT, status_text, 0, "L")
             end_y = self.get_y()
-            final_height = max(LINE_HEIGHT, end_y - start_y) 
+            final_height = max(LINE_HEIGHT, end_y - start_y)
             v_offset = (final_height - LINE_HEIGHT) / 2
 
             self.set_xy(start_x, start_y)
@@ -149,34 +149,37 @@ def duracao_audio_segundos(caminho):
 
 def transcrever_audio(caminho):
     try:
-        # Cria o model generativo (ajuste para o modelo que você tem acesso)
-        model = genai.GenerativeModel("gemini-1.5-pro")  # trocar se preferir outro release
+        model = genai.GenerativeModel("gemini-1.5-pro-latest")  # ✅ corrigido (sem "models/")
 
         mime_type, _ = mimetypes.guess_type(caminho)
         if not mime_type:
             mime_type = "audio/mpeg"
 
-        # Leia os bytes do arquivo e envie como dicionário (mime_type + data)
         with open(caminho, "rb") as f:
             audio_bytes = f.read()
 
+        # ✅ formato correto para enviar áudio e prompt
         response = model.generate_content(
             [
-                (
-                    "Transcreva o áudio completo em Português do Brasil. "
-                    "Identifique os locutores pelo nome real se possível. "
-                    "Formate como diálogo assim: 'Nome: fala do participante'. "
-                    "Evite linhas longas e remova espaços extras desnecessários."
-                ),
                 {
-                    "mime_type": mime_type,
-                    "data": audio_bytes,
-                },
+                    "role": "user",
+                    "parts": [
+                        "Transcreva o áudio completo em Português do Brasil. "
+                        "Identifique os locutores pelo nome real se possível. "
+                        "Formate como diálogo assim: 'Nome: fala do participante'. "
+                        "Evite linhas longas e remova espaços extras desnecessários.",
+                        {
+                            "mime_type": mime_type,
+                            "data": audio_bytes,
+                        },
+                    ],
+                }
             ]
         )
 
-        texto = response.text.strip()
+        texto = response.text.strip() if response and hasattr(response, "text") else ""
         return texto
+
     except Exception as e:
         print(f"[TRANSCRICAO] Erro: {e}")
         return f"ERRO na Transcrição: {type(e).__name__}: {str(e)}"
@@ -200,7 +203,6 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if not all(col in df.columns for col in colunas_requeridas):
             raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
 
-        # ------------------ PROCESSAMENTO DE LINHAS ------------------
         async def processar_linha(row):
             link = row["GRAVAÇÃO"]
             call_id = str(row["ID"])
@@ -226,6 +228,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Áudio muito curto (<30s)"}
 
             transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo))
+            await asyncio.sleep(1)
 
             try:
                 os.remove(nome_arquivo)
@@ -274,7 +277,6 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if resultados_curtos_resumo:
             pdf.write_summary_block(resultados_curtos_resumo)
 
-        # pdf.output(dest='S') retorna bytearray — convertemos para bytes diretamente
         pdf_output = bytes(pdf.output(dest='S'))
         print("[PDF] PDF gerado com sucesso!")
 
