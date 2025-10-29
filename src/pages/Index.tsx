@@ -7,7 +7,23 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Mail, Users, FileUp, ArrowRight, Mic, Search, History, MailCheck, Mails, Phone, FileSpreadsheet, SheetIcon, Construction} from 'lucide-react'
+import { 
+  Mail, 
+  Users, 
+  FileUp, 
+  ArrowRight, 
+  Mic, 
+  Search, 
+  History, 
+  MailCheck, 
+  Mails, 
+  Phone, 
+  FileSpreadsheet, 
+  SheetIcon, 
+  Construction, 
+  Headset,
+  Smartphone
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { EmailValidatorHistory } from '@/components/EmailValidatorHistory'
@@ -91,7 +107,7 @@ export default function Index() {
             },*/
             {
               title: 'Extrator de Números',
-              description: 'Extraia telefones de uma planilha no formato da Dibai Sales.',
+              description: 'Extraia telefones de uma planilha no formato da Dibai Sales e receba os arquivos no formato ideal para subir no nosso Agente.',
               icon: Phone,
               actions: [
                 { to: '/extrator-numero', text: 'Acessar Extrator', icon: ArrowRight },
@@ -114,24 +130,28 @@ export default function Index() {
               ],
             },
             {
-              title: 'Speedio/Assertiva',
-              description: 'Converta e prepare planilhas de consulta da Speedio para a Assertiva.',
-              icon: Construction,
+              title: 'Agente de Ligações',
+              description: 'Acesse a plataforma para subir campanhas no Agente',
+              icon: Headset,
               actions: [
-                { to: '#', text: 'Em Ajustes', icon: ArrowRight, variant: 'secondary', disabled: true },
+                { 
+                  to: 'https://ia-dibaisales.vercel.app/', 
+                  text: 'Acessar plataforma', 
+                  icon: ArrowRight, 
+                  external: true 
+                },
               ],
-              isDisabled: true, // Card desabilitado
-              cardBorderColor: 'border-orange-500/50', 
-              cardHoverBorderColor: 'hover:border-orange-500/80'
             },
             {
-              title: 'Agente de Ligações',
-              description: 'Acesse a plataforma do nosso agente de ligações',
-              icon: Construction,
+              title: 'Validador de Whatsapp',
+              description: 'Valide números de WhatsApp rapidamente e garanta que seus contatos estão ativos.',
+              icon: Smartphone,
               actions: [
                 { to: '#', text: 'Em Ajustes', icon: ArrowRight, variant: 'secondary', disabled: true },
               ],
-              isDisabled: true,
+              isDisabled: true, 
+              cardBorderColor: 'border-orange-500/50', 
+              cardHoverBorderColor: 'hover:border-orange-500/80'
             },
           ].map((tool) => (
             <Card
