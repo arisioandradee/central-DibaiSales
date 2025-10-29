@@ -12,12 +12,17 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import asyncio
 from functools import partial
+import mimetypes
 
 # ------------------ CARREGA .ENV ------------------
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY não encontrada. Verifique seu arquivo .env")
+
+# Configure Gemini (google.generativeai)
+genai.configure(api_key=GEMINI_API_KEY)
+print("[API] Conexão com Gemini OK")
 
 # ------------------ CONFIGURAÇÕES ------------------
 LIMITE_TRANSCRICAO_CURTA = 100
@@ -67,7 +72,7 @@ class PDF(FPDF):
         self.cell(W_STATUS, LINE_HEIGHT, "STATUS / RESUMO", 1, 1, "C", fill=True)
         self.set_font("Arial", "", 9)
         self.set_text_color(0, 0, 0)
-
+        
     def write_summary_block(self, curtas: list[dict]):
         print("[PDF] Adicionando resumo de chamadas curtas/falhas")
         self.add_page()
@@ -80,26 +85,26 @@ class PDF(FPDF):
         W_ATENDENTE = 40
         W_STATUS = 125
         LINE_HEIGHT = 6
-
+        
         self.set_fill_color(240, 240, 240)
         self._draw_summary_header(W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT)
-
-        PB_TRIGGER = self.page_break_trigger
-        MIN_ROW_HEIGHT = LINE_HEIGHT * 3
+        
+        PB_TRIGGER = self.page_break_trigger 
+        MIN_ROW_HEIGHT = LINE_HEIGHT * 3 
 
         for item in curtas:
             status_text = item["STATUS"]
             if self.get_y() + MIN_ROW_HEIGHT > PB_TRIGGER:
                 self.add_page()
                 self._draw_summary_header(W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT)
-
+                
             start_y = self.get_y()
             start_x = self.get_x()
 
             self.set_xy(start_x + W_ID + W_ATENDENTE, start_y)
             self.multi_cell(W_STATUS, LINE_HEIGHT, status_text, 0, "L")
             end_y = self.get_y()
-            final_height = max(LINE_HEIGHT, end_y - start_y)
+            final_height = max(LINE_HEIGHT, end_y - start_y) 
             v_offset = (final_height - LINE_HEIGHT) / 2
 
             self.set_xy(start_x, start_y)
@@ -115,7 +120,6 @@ class PDF(FPDF):
             self.set_xy(start_x + W_ID + W_ATENDENTE, start_y)
             self.cell(W_STATUS, final_height, "", 1, 1, "L")
             self.set_y(end_y)
-
 
 # ------------------ FUNÇÕES AUXILIARES ------------------
 def baixar_audio(link_gravacao, nome_arquivo_saida):
@@ -134,7 +138,6 @@ def baixar_audio(link_gravacao, nome_arquivo_saida):
         print(f"[DOWNLOAD] Erro: {e}")
         return f"Erro de conexão: {str(e)}"
 
-
 def duracao_audio_segundos(caminho):
     try:
         audio = MutagenFile(caminho)
@@ -144,25 +147,39 @@ def duracao_audio_segundos(caminho):
     except Exception:
         return 0
 
-
 def transcrever_audio(caminho):
     try:
-        model = genai.GenerativeModel("gemini-1.5-pro")  # ou gemini-2.0-flash
-        with open(caminho, "rb") as audio_file:
-            response = model.generate_content(
-                [
+        # Cria o model generativo (ajuste para o modelo que você tem acesso)
+        model = genai.GenerativeModel("gemini-1.5-pro")  # trocar se preferir outro release
+
+        mime_type, _ = mimetypes.guess_type(caminho)
+        if not mime_type:
+            mime_type = "audio/mpeg"
+
+        # Leia os bytes do arquivo e envie como dicionário (mime_type + data)
+        with open(caminho, "rb") as f:
+            audio_bytes = f.read()
+
+        response = model.generate_content(
+            [
+                (
                     "Transcreva o áudio completo em Português do Brasil. "
                     "Identifique os locutores pelo nome real se possível. "
                     "Formate como diálogo assim: 'Nome: fala do participante'. "
-                    "Evite linhas longas e remova espaços extras desnecessários.",
-                    audio_file,
-                ]
-            )
-        return response.text.strip()
+                    "Evite linhas longas e remova espaços extras desnecessários."
+                ),
+                {
+                    "mime_type": mime_type,
+                    "data": audio_bytes,
+                },
+            ]
+        )
+
+        texto = response.text.strip()
+        return texto
     except Exception as e:
         print(f"[TRANSCRICAO] Erro: {e}")
         return f"ERRO na Transcrição: {type(e).__name__}: {str(e)}"
-
 
 # ------------------ ENDPOINT ------------------
 @router.post("/transcrever_audios")
@@ -183,10 +200,6 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if not all(col in df.columns for col in colunas_requeridas):
             raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
 
-        # Configura chave do Gemini
-        genai.configure(api_key=GEMINI_API_KEY)
-        print("[API] Conexão com Gemini OK")
-
         # ------------------ PROCESSAMENTO DE LINHAS ------------------
         async def processar_linha(row):
             link = row["GRAVAÇÃO"]
@@ -206,16 +219,23 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
 
             duracao = await loop.run_in_executor(None, partial(duracao_audio_segundos, nome_arquivo))
             if duracao < 30:
-                os.remove(nome_arquivo)
+                try:
+                    os.remove(nome_arquivo)
+                except Exception:
+                    pass
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Áudio muito curto (<30s)"}
 
             transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo))
-            os.remove(nome_arquivo)
 
-            if transcricao_texto.startswith("ERRO na Transcrição"):
+            try:
+                os.remove(nome_arquivo)
+            except Exception:
+                pass
+
+            if isinstance(transcricao_texto, str) and transcricao_texto.startswith("ERRO na Transcrição"):
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": transcricao_texto}
-            elif len(transcricao_texto) < LIMITE_TRANSCRICAO_CURTA:
-                resumo_curto = transcricao_texto.replace('\n', ' ').strip()[:70] + "..."
+            elif not isinstance(transcricao_texto, str) or len(transcricao_texto) < LIMITE_TRANSCRICAO_CURTA:
+                resumo_curto = (str(transcricao_texto).replace('\n', ' ').strip()[:70] + "...") if transcricao_texto else "Transcrição vazia"
                 return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": f"CURTA: {resumo_curto}"}
             else:
                 return {"LONGO": {"ID": call_id, "ATENDENTE": atendente_nome, "LINK": link, "TRANSCRICAO": transcricao_texto}}
@@ -254,7 +274,8 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if resultados_curtos_resumo:
             pdf.write_summary_block(resultados_curtos_resumo)
 
-        pdf_output = pdf.output(dest='S').encode('latin1')
+        # pdf.output(dest='S') retorna bytearray — convertemos para bytes diretamente
+        pdf_output = bytes(pdf.output(dest='S'))
         print("[PDF] PDF gerado com sucesso!")
 
         return StreamingResponse(
