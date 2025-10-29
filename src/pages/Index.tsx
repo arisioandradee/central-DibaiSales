@@ -32,7 +32,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({
   <Button
     asChild
     variant={variant}
-    className={`w-full text-sm font-semibold h-11 transition-transform duration-200 hover:scale-[1.01] border-none ${disabled ? 'pointer-events-none opacity-60' : ''}`}
+    className={`w-full max-w-[180px] text-sm font-semibold h-11 transition-transform duration-200 hover:scale-[1.01] border-none ${disabled ? 'pointer-events-none opacity-60' : ''}`}
   >
     <Link to={to}>
       {text}
@@ -63,8 +63,6 @@ export default function Index() {
           />
         </div>
       </header>
-
-      <Separator className="max-w-8xl mx-auto" />
 
       {/* 2. SEÇÃO DE FERRAMENTAS (CARDS) */}
       <div className="max-w-8xl mx-auto w-full"> 
@@ -120,7 +118,7 @@ export default function Index() {
               description: 'Converta e prepare planilhas de consulta da Speedio para a Assertiva.',
               icon: Construction,
               actions: [
-                { to: '#', text: 'Em desenvolvimento', variant: 'secondary', disabled: true },
+                { to: '#', text: 'Em Ajustes', icon: ArrowRight, variant: 'secondary', disabled: true },
               ],
               isDisabled: true, // Card desabilitado
               cardBorderColor: 'border-orange-500/50', 
@@ -131,7 +129,7 @@ export default function Index() {
               description: 'Acesse a plataforma do nosso agente de ligações',
               icon: Construction,
               actions: [
-                { to: '#', text: 'Em desenvolvimento', variant: 'secondary', disabled: true },
+                { to: '#', text: 'Em Ajustes', icon: ArrowRight, variant: 'secondary', disabled: true },
               ],
               isDisabled: true,
             },
@@ -161,7 +159,7 @@ export default function Index() {
                 </div>
               </CardHeader>
               <CardContent className="mt-auto pt-0 p-4 md:p-6">
-                <div className={`flex ${tool.actions.length > 1 ? 'flex-row' : 'flex-col'} gap-4`}>
+                <div className={`flex flex-wrap ${tool.actions.length > 1 ? 'flex-row' : 'flex-col'} gap-4`}>
                   {tool.actions.map((action, index) => (
                     <ActionButton
                       key={index}
