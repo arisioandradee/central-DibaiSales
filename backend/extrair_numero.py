@@ -17,12 +17,11 @@ PROMPT_TEMPLATE = (
 )
 
 def formatar_telefone(numero: str) -> str:
-    """Formata o número de telefone, garantindo +55 no início."""
     if not numero or str(numero).strip() == '':
         return ''
     numero = str(numero).strip()
-    if not numero.startswith('55') and not numero.startswith('+55'):
-        numero = f'+55{numero}'
+    if not numero.startswith('55') and not numero.startswith('55'):
+        numero = f'55{numero}'
     numero = numero.replace(' ', '').replace('-', '')
     return numero
 
