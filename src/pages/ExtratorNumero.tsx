@@ -8,7 +8,14 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FileUploader } from '@/components/FileUploader'
-import { Loader2, CheckCircle, XCircle, Download, Phone, ChevronDown } from 'lucide-react'
+import {
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Download,
+  Phone,
+  ChevronDown,
+} from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
@@ -17,7 +24,12 @@ import { ENDPOINTS } from '../api/endpoints'
 type ProcessingStatus = 'idle' | 'loading' | 'success' | 'error'
 
 interface SocioData {
-  [key: string]: { nome: string; celular: string }[]
+  [key: string]: {
+    name: string
+    phone_number: string
+    business: string
+    prompt: string
+  }[]
 }
 
 export default function ExtratorContatosPage() {
@@ -78,22 +90,27 @@ export default function ExtratorContatosPage() {
         description: `O arquivo ZIP (${DOWNLOAD_FILENAME}) foi gerado com sucesso.`,
       })
 
-      // --- Ler Excel do zip para exibir no site ---
+      // --- Ler os arquivos .xlsx dentro do ZIP ---
       const JSZip = (await import('jszip')).default
       const zip = await JSZip.loadAsync(fileBlob)
       const tempSocios: SocioData = {}
 
       for (const filename of Object.keys(zip.files)) {
+        if (!filename.endsWith('.xlsx')) continue
         const fileData = await zip.files[filename].async('arraybuffer')
         const xlsx = await import('xlsx')
         const wb = xlsx.read(fileData, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
-        const jsonData: { nome: string; celular: string }[] = xlsx.utils.sheet_to_json(ws, { header: ['nome', 'celular'] })
+
+        // Converte a planilha para JSON respeitando as colunas reais
+        const jsonData = xlsx.utils.sheet_to_json(ws) as SocioData[string]
+
         const socioKey = filename.toLowerCase().includes('socio1')
           ? 'socio1'
           : filename.toLowerCase().includes('socio2')
           ? 'socio2'
           : 'socio3'
+
         tempSocios[socioKey] = jsonData
       }
 
@@ -132,7 +149,8 @@ export default function ExtratorContatosPage() {
               Extração concluída com sucesso!
             </AlertTitle>
             <AlertDescription className="text-success-foreground">
-              O arquivo ZIP (<strong>{DOWNLOAD_FILENAME}</strong>) com os contatos dos sócios está pronto.
+              O arquivo ZIP (<strong>{DOWNLOAD_FILENAME}</strong>) com os
+              contatos dos sócios está pronto.
             </AlertDescription>
           </Alert>
         )
@@ -140,7 +158,9 @@ export default function ExtratorContatosPage() {
         return (
           <Alert variant="destructive" className="shadow-lg">
             <XCircle className="h-5 w-5" />
-            <AlertTitle className="text-lg font-semibold">Erro no Processamento</AlertTitle>
+            <AlertTitle className="text-lg font-semibold">
+              Erro no Processamento
+            </AlertTitle>
             <AlertDescription className="break-words">
               {errorMessage}
             </AlertDescription>
@@ -182,16 +202,23 @@ export default function ExtratorContatosPage() {
                 disabled={!file || status === 'loading'}
                 className="w-full h-12 text-lg font-semibold transition-transform duration-200 hover:scale-[1.01] shadow-lg shadow-primary/50"
               >
-                {status === 'loading' && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+                {status === 'loading' && (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                )}
                 Extrair Contatos
               </Button>
 
-              {status !== 'idle' && <div className="w-full pt-2">{renderStatusIndicator()}</div>}
+              {status !== 'idle' && (
+                <div className="w-full pt-2">{renderStatusIndicator()}</div>
+              )}
 
               {status === 'success' && Object.keys(socios).length > 0 && (
                 <>
                   <div className="w-full mt-4 flex flex-col gap-2">
-                    <label htmlFor="socio-select" className="font-semibold text-foreground">
+                    <label
+                      htmlFor="socio-select"
+                      className="font-semibold text-foreground"
+                    >
                       Selecione o Sócio:
                     </label>
                     <div className="relative w-full">
@@ -212,27 +239,35 @@ export default function ExtratorContatosPage() {
                   </div>
 
                   <div className="max-h-72 overflow-y-auto border border-gray-600 dark:border-gray-400 rounded-lg p-2 bg-gray-800 dark:bg-gray-900 shadow-inner mt-2">
-                    <div className="grid grid-cols-2 gap-2 font-semibold border-b border-gray-500 pb-1 mb-2 text-gray-200">
+                    <div className="grid grid-cols-4 gap-2 font-semibold border-b border-gray-500 pb-1 mb-2 text-gray-200">
                       <span>Nome</span>
-                      <span>Celular</span>
+                      <span>Telefone</span>
+                      <span>Empresa</span>
+                      <span>Prompt</span>
                     </div>
 
                     {socios[selectedSocio]?.map((contato, idx) => (
                       <div
                         key={idx}
-                        className="grid grid-cols-2 gap-2 py-1 px-1 rounded hover:bg-gray-700 dark:hover:bg-gray-800 transition-colors"
+                        className="grid grid-cols-4 gap-2 py-1 px-1 rounded hover:bg-gray-700 dark:hover:bg-gray-800 transition-colors"
                       >
-                        {/* Coluna de nomes independente */}
-                        <div className="select-text">{contato.nome}</div>
-                        {/* Coluna de celulares independente */}
-                        <div className="select-text">{contato.celular}</div>
+                        <div className="select-text">{contato.name}</div>
+                        <div className="select-text">
+                          {contato.phone_number}
+                        </div>
+                        <div className="select-text">{contato.business}</div>
+                        <div className="select-text truncate">
+                          {contato.prompt}
+                        </div>
                       </div>
                     ))}
                   </div>
 
                   {convertedBlob && (
                     <Button
-                      onClick={() => handleDownload(convertedBlob, DOWNLOAD_FILENAME)}
+                      onClick={() =>
+                        handleDownload(convertedBlob, DOWNLOAD_FILENAME)
+                      }
                       className="w-full h-12 text-lg font-semibold bg-success hover:bg-success/90 text-success-foreground transition-transform duration-200 hover:scale-[1.01] mt-4 shadow-lg shadow-success/50 flex items-center justify-center gap-2"
                     >
                       <Download className="h-5 w-5" /> Baixar ZIP
@@ -250,8 +285,11 @@ export default function ExtratorContatosPage() {
                         Aviso Importante sobre o Formato
                       </AlertTitle>
                       <AlertDescription className="text-sm leading-relaxed">
-                        Sua planilha deve ser no formato <strong>Excel das planilhas Dibai Sales</strong>.<br />
-                        A aba que contém os dados precisa, preferencialmente, se chamar <strong>main</strong>.
+                        Sua planilha deve ser no formato{' '}
+                        <strong>Excel das planilhas Dibai Sales</strong>.
+                        <br />
+                        A aba que contém os dados precisa, preferencialmente, se
+                        chamar <strong>main</strong>.
                       </AlertDescription>
                     </div>
                   </div>
