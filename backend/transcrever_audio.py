@@ -67,7 +67,7 @@ class PDF(FPDF):
         self.cell(W_STATUS, LINE_HEIGHT, "STATUS / RESUMO", 1, 1, "C", fill=True)
         self.set_font("Arial", "", 9)
         self.set_text_color(0, 0, 0)
-        
+
     def write_summary_block(self, curtas: list[dict]):
         print("[PDF] Adicionando resumo de chamadas curtas/falhas")
         self.add_page()
@@ -80,26 +80,26 @@ class PDF(FPDF):
         W_ATENDENTE = 40
         W_STATUS = 125
         LINE_HEIGHT = 6
-        
+
         self.set_fill_color(240, 240, 240)
         self._draw_summary_header(W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT)
-        
-        PB_TRIGGER = self.page_break_trigger 
-        MIN_ROW_HEIGHT = LINE_HEIGHT * 3 
+
+        PB_TRIGGER = self.page_break_trigger
+        MIN_ROW_HEIGHT = LINE_HEIGHT * 3
 
         for item in curtas:
             status_text = item["STATUS"]
             if self.get_y() + MIN_ROW_HEIGHT > PB_TRIGGER:
                 self.add_page()
                 self._draw_summary_header(W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT)
-                
+
             start_y = self.get_y()
             start_x = self.get_x()
 
             self.set_xy(start_x + W_ID + W_ATENDENTE, start_y)
             self.multi_cell(W_STATUS, LINE_HEIGHT, status_text, 0, "L")
             end_y = self.get_y()
-            final_height = max(LINE_HEIGHT, end_y - start_y) 
+            final_height = max(LINE_HEIGHT, end_y - start_y)
             v_offset = (final_height - LINE_HEIGHT) / 2
 
             self.set_xy(start_x, start_y)
@@ -115,6 +115,7 @@ class PDF(FPDF):
             self.set_xy(start_x + W_ID + W_ATENDENTE, start_y)
             self.cell(W_STATUS, final_height, "", 1, 1, "L")
             self.set_y(end_y)
+
 
 # ------------------ FUNÇÕES AUXILIARES ------------------
 def baixar_audio(link_gravacao, nome_arquivo_saida):
@@ -133,6 +134,7 @@ def baixar_audio(link_gravacao, nome_arquivo_saida):
         print(f"[DOWNLOAD] Erro: {e}")
         return f"Erro de conexão: {str(e)}"
 
+
 def duracao_audio_segundos(caminho):
     try:
         audio = MutagenFile(caminho)
@@ -142,27 +144,25 @@ def duracao_audio_segundos(caminho):
     except Exception:
         return 0
 
+
 def transcrever_audio(caminho):
     try:
-        uploaded_file = client_gemini.files.upload(file=caminho)
-        response = client_gemini.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                f"""
-                Transcreva o áudio completo em Português do Brasil.
-                Identifique os locutores pelo nome real se possível.
-                Formate como diálogo assim: "Nome: fala do participante".
-                Evite linhas longas e remova espaços extras desnecessários.
-                """,
-                uploaded_file
-            ]
-        )
-        texto = response.text.strip()
-        client_gemini.files.delete(name=uploaded_file.name)
-        return texto
+        model = genai.GenerativeModel("gemini-1.5-pro")  # ou gemini-2.0-flash
+        with open(caminho, "rb") as audio_file:
+            response = model.generate_content(
+                [
+                    "Transcreva o áudio completo em Português do Brasil. "
+                    "Identifique os locutores pelo nome real se possível. "
+                    "Formate como diálogo assim: 'Nome: fala do participante'. "
+                    "Evite linhas longas e remova espaços extras desnecessários.",
+                    audio_file,
+                ]
+            )
+        return response.text.strip()
     except Exception as e:
         print(f"[TRANSCRICAO] Erro: {e}")
         return f"ERRO na Transcrição: {type(e).__name__}: {str(e)}"
+
 
 # ------------------ ENDPOINT ------------------
 @router.post("/transcrever_audios")
@@ -183,9 +183,8 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         if not all(col in df.columns for col in colunas_requeridas):
             raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
 
-        global client_gemini
-        client_gemini = genai.Client(api_key=GEMINI_API_KEY)
-        client_gemini.models.list()
+        # Configura chave do Gemini
+        genai.configure(api_key=GEMINI_API_KEY)
         print("[API] Conexão com Gemini OK")
 
         # ------------------ PROCESSAMENTO DE LINHAS ------------------
