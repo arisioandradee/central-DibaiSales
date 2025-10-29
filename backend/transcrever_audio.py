@@ -62,11 +62,8 @@ def duracao_audio_segundos(caminho: str) -> float:
         return 0.0
 
 def transcrever_audio(caminho_arquivo: str) -> str:
-    """
-    Transcreve o áudio usando Gemini 1.5
-    """
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         audio_file = Path(caminho_arquivo)
         
         # O .read_bytes() pode falhar se o arquivo foi baixado corrompido ou é inválido,
