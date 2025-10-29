@@ -149,7 +149,7 @@ def duracao_audio_segundos(caminho):
 
 def transcrever_audio(caminho):
     try:
-        model = genai.GenerativeModel("gemini-1.5-pro-latest")  # ✅ corrigido (sem "models/")
+        model = genai.GenerativeModel("models/gemini-2.5-pro")  
 
         mime_type, _ = mimetypes.guess_type(caminho)
         if not mime_type:
