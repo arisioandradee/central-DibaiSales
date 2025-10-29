@@ -68,10 +68,18 @@ def transcrever_audio(caminho_arquivo: str) -> str:
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         audio_file = Path(caminho_arquivo)
+        
+        # O .read_bytes() pode falhar se o arquivo foi baixado corrompido ou é inválido,
+        # mas a exceção principal virá do generate_content.
         response = model.generate_content([
             {"mime_type": "audio/mp3", "data": audio_file.read_bytes()},
             "Transcreva o áudio em texto."
         ])
+        
+        # Verifica se a resposta não está vazia (caso a API não consiga transcrever nada)
+        if not response.text.strip():
+             return "Erro na transcrição: Resposta da API Gemini vazia ou sem texto."
+
         return response.text.strip()
     except Exception as e:
         return f"Erro na transcrição: {e}"
@@ -89,6 +97,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
     pdf.set_font("Helvetica", size=11)
     largura_util = 180
 
+    # Esta lista será compartilhada entre as tarefas assíncronas
     resultados_curtos_resumo = []
 
     def write_long_text(p: FPDF, text: str, width=largura_util, line_h=6):
@@ -130,20 +139,28 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
 
                 nome_arquivo_local = os.path.join(PASTA_TEMP, f"{call_id}.mp3")
                 loop = asyncio.get_event_loop()
+                
+                # 1. Download
                 resultado_download = await loop.run_in_executor(None, partial(baixar_audio, link, nome_arquivo_local))
                 if resultado_download is not True:
                     resultados_curtos_resumo.append({"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": resultado_download})
                     return
 
+                # 2. Duração
                 dur = await loop.run_in_executor(None, partial(duracao_audio_segundos, nome_arquivo_local))
                 if dur < 30:
                     resultados_curtos_resumo.append({"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": f"Áudio muito curto ({dur:.2f}s)"})
                     return
 
-                # Transcrição real usando Gemini
+                # 3. Transcrição real usando Gemini
                 transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo_local))
 
-                # --- PDF incremental ---
+                # !!! CORREÇÃO AQUI: Verifica se a transcrição falhou !!!
+                if transcricao_texto.startswith("Erro na transcrição:"):
+                    resultados_curtos_resumo.append({"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": transcricao_texto})
+                    print(f"[FALHA] Transcrição falhou para o ID {call_id}. Registrado no resumo.")
+                    return # Sai do processamento desta linha
+                
                 pdf.add_page()
                 pdf.multi_cell(largura_util, 6, f"ID: {call_id}")
                 pdf.multi_cell(largura_util, 6, f"Atendente: {atendente_nome}")
@@ -151,8 +168,11 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
                 pdf.ln(4)
                 pdf.multi_cell(largura_util, 6, "Transcrição:")
                 write_long_text(pdf, transcricao_texto)
+                print(f"[SUCESSO] Transcrição concluída e adicionada ao PDF para o ID {call_id}")
 
         tasks = [processar_linha(row) for _, row in df.iterrows()]
+        
+        # Aguarda todas as tarefas (download/transcrição e adição 'incremental' ao PDF)
         await asyncio.gather(*tasks)
 
         # PDF resumo de áudios curtos/falhas
@@ -174,6 +194,14 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio.pdf"}
         )
+
+    except HTTPException:
+        raise # Rethrow HTTPException
+    except Exception as e:
+        print(f"[ERRO FATAL] Exceção durante o processamento: {e}")
+        # Se ocorrer um erro não tratado, limpa o buffer e levanta um erro 500
+        buffer_pdf.close()
+        raise HTTPException(status_code=500, detail=f"Erro interno do servidor: {str(e)}")
 
     finally:
         try:
