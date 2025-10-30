@@ -284,6 +284,10 @@ export default function WhatsAppValidatorPage() {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <h3 className="text-lg font-semibold">Resultados ({batchResults.length})</h3>
+                      <Button variant="outline" size="sm" onClick={exportResults} className="flex items-center gap-2">
+                        <Download className="h-4 w-4"/>
+                        Exportar XLSX
+                      </Button>
                     </div>
 
                     <div className="border rounded-lg overflow-hidden shadow-sm">
