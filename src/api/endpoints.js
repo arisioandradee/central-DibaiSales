@@ -5,5 +5,6 @@ export const ENDPOINTS = {
   //extratorEmail: `${BASE_URL}/extrator-email`,
   extratorNumero: `${BASE_URL}/extrator-numero`,
   speedioAssertiva: `${BASE_URL}/speedio_assertiva`,
-  transcreverAudios: `${BASE_URL}/transcrever_audios`
+  transcreverAudios: `${BASE_URL}/transcrever_audios`,
+  whatsappValidator: `${BASE_URL}/whatsapp_validator`
 };

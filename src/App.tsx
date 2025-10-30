@@ -13,9 +13,7 @@ import ExtratorEmail from './pages/ExtratorEmail'
 import AudioTranscriber from './pages/AudioTranscriber'
 import SpeedioAssertivaConverter from './pages/SpeedioAssertivaConverter'
 import ExtratorNumero from './pages/ExtratorNumero'
-
-// ONLY IMPORT AND RENDER WORKING PAGES, NEVER ADD PLACEHOLDER COMPONENTS OR PAGES IN THIS FILE
-// AVOID REMOVING ANY CONTEXT PROVIDERS FROM THIS FILE (e.g. TooltipProvider, Toaster, Sonner)
+import WhatsappValidator from './pages/WhatsappValidator'
 
 const App = () => (
   <BrowserRouter
@@ -48,6 +46,10 @@ const App = () => (
             <Route
               path="/extrator-numero"
               element={<ExtratorNumero />}
+            />
+            <Route
+              path="/whatsapp-validator"
+              element={<WhatsappValidator />}
             />
           </Route>
           <Route path="*" element={<NotFound />} />

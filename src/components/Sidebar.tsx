@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { Home, MailCheck, Sheet as SheetIcon, Users, Mic, FileSpreadsheet, Mails, Phone, Headset} from 'lucide-react'
+import { Home, MailCheck, Sheet as SheetIcon, Users, Mic, FileSpreadsheet, Mails, Phone, Headset, Smartphone} from 'lucide-react'
 
 interface SidebarProps {
   className?: string
@@ -41,6 +41,11 @@ const navigation = [
     name: 'Agente de Ligações',
     href: 'https://ia-dibaisales.vercel.app/',
     icon: Headset,
+  },
+  {
+    name: 'Validador de Whatsapp',
+    href: '/whatsapp-validator',
+    icon: Smartphone,
   },
 ]
 
