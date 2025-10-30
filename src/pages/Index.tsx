@@ -22,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { EmailValidatorHistory } from '@/components/EmailValidatorHistory'
 import { PartnerContactExtractorHistory } from '@/components/PartnerContactExtractorHistory'
+import { WhatsAppValidatorHistory} from '@/components/WhatsappValidatorHistory'
 import WhatsAppValidatorPage from './WhatsappValidator'
 
 // --- COMPONENTE AUXILIAR (Ação Rápida no Card) ---
@@ -197,6 +198,13 @@ export default function Index() {
             <CardContent className="p-6">
               <CardTitle className="text-xl font-semibold">Histórico do Validador de E-mails</CardTitle>
               <EmailValidatorHistory />
+            </CardContent>
+          </Card>
+
+          <Card className="p-0 border shadow-lg">
+            <CardContent className="p-6">
+              <CardTitle className="text-xl font-semibold">Histórico do Validador de Whatsapp</CardTitle>
+              <WhatsAppValidatorHistory />
             </CardContent>
           </Card>
         </div>
