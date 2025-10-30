@@ -26,7 +26,16 @@ class ValidationResult(BaseModel):
     sub_status: str = ""
 
 
+def format_number(number: str) -> str:
+    """Garante que o número comece com o código do Brasil '55'"""
+    number = number.strip()
+    if not number.startswith("55"):
+        number = "55" + number
+    return number
+
+
 def call_whatsapp_api(number: str) -> ValidationResult:
+    number = format_number(number)  # garante o prefixo 55
     payload = {"phone_number": number}
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -53,9 +62,9 @@ def call_whatsapp_api(number: str) -> ValidationResult:
 def validate(req: ValidationRequest):
     # Validação de input
     if req.number:
-        return call_whatsapp_api(req.number.strip())
+        return call_whatsapp_api(req.number)
     elif req.numbers and len(req.numbers) > 0:
-        results = [call_whatsapp_api(n.strip()) for n in req.numbers]
+        results = [call_whatsapp_api(n) for n in req.numbers]
         return results
     else:
         raise HTTPException(status_code=400, detail="Nenhum número fornecido")

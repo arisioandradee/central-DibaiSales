@@ -223,15 +223,6 @@ export default function WhatsAppValidatorPage() {
                     {isBatchLoading && !batchFile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Validar Números ({batchText.trim().split('\n').filter(e=>e.trim()).length} itens)
                   </Button>
-
-                  <Button
-                    onClick={handleToggleFileUpload}
-                    variant={showFileUpload ? 'destructive' : 'outline'}
-                    className={cn("w-full sm:w-auto transition-colors", showFileUpload ? "bg-red-500 hover:bg-red-600 text-white" : "border-gray-500 text-gray-400 hover:bg-popover") }
-                    disabled={isBatchLoading}
-                  >
-                    {showFileUpload ? <><X className="mr-2 h-4 w-4"/> Fechar Arquivo</> : <><FileText className="mr-2 h-4 w-4"/> Anexar Arquivo</>}
-                  </Button>
                 </div>
 
                 {batchResults.length > 0 && (
