@@ -293,7 +293,7 @@ export default function WhatsAppValidatorPage() {
 
                       <div className="flex items-center gap-2">
                         <select
-                          className="border rounded-md p-1 text-sm"
+                          className="border border-border rounded-md px-2 py-1 text-sm bg-background text-foreground hover:bg-accent/20 transition-colors"
                           value={displayLimit}
                           onChange={(e) =>
                             setDisplayLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))

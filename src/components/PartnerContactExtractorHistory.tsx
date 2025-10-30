@@ -79,8 +79,7 @@ export function PartnerContactExtractorHistory() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {extractorHistory.map((item) => (
-            // Classe 'border-b-0' para remover a borda inferior de cada linha.
+          {extractorHistory.slice(0, 10).map((item) => (
             <TableRow key={item.id} className="border-b-0">
               <TableCell className="text-xs text-muted-foreground p-3">
                 {/* Separando Data e Hora */}

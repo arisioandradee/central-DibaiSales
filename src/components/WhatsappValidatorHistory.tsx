@@ -55,7 +55,7 @@ export function WhatsAppValidatorHistory() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {history.map((item) => (
+          {history.slice(0, 10).map((item) => (
             <TableRow key={item.id} className="border-b-0">
               <TableCell className="text-xs text-muted-foreground p-3">
                 <div className="flex flex-col">
