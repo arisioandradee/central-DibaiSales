@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Loader2, CheckCircle, XCircle, HelpCircle, Download } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, HelpCircle, Download, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/use-toast'
 import * as XLSX from 'xlsx'
@@ -29,7 +29,6 @@ type HistoryItem = {
   total: number
 }
 
-// Mapeamento de status para label e cor
 const statusMap: Record<ValidationStatus, { label: string; color: string }> = {
   valid: { label: 'Válido', color: 'FF00FF00' },
   invalid: { label: 'Inválido', color: 'FFFF0000' },
@@ -42,7 +41,6 @@ const statusConfig: Record<ValidationStatus, { icon: React.ElementType; color: s
   unknown: { icon: HelpCircle, color: 'text-gray-400', label: 'Desconhecido' },
 }
 
-// Máximo de requisições simultâneas
 const MAX_CONCURRENT_REQUESTS = 10
 
 export default function WhatsAppValidatorPage() {
@@ -54,9 +52,9 @@ export default function WhatsAppValidatorPage() {
   const [isBatchLoading, setIsBatchLoading] = useState(false)
   const [batchProgress, setBatchProgress] = useState(0)
   const [batchResults, setBatchResults] = useState<BatchResult[]>([])
+  const [displayLimit, setDisplayLimit] = useState<number | 'all'>(10)
   const { toast } = useToast()
 
-  // ================== HISTÓRICO ==================
   const addHistoryItem = (item: Omit<HistoryItem, 'id' | 'date'>) => {
     const saved = localStorage.getItem('whatsappHistory')
     const history: HistoryItem[] = saved ? JSON.parse(saved) : []
@@ -71,7 +69,6 @@ export default function WhatsAppValidatorPage() {
     localStorage.setItem('whatsappHistory', JSON.stringify(updated))
   }
 
-  // ================== VALIDAÇÃO ÚNICA ==================
   const handleSingleValidate = async () => {
     if (!singleNumber) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, insira um número.' })
@@ -93,7 +90,6 @@ export default function WhatsAppValidatorPage() {
       const data: BatchResult = await resp.json()
       setSingleResult(data)
 
-      // Salvar no histórico
       addHistoryItem({
         type: 'Único',
         input: singleNumber,
@@ -118,7 +114,6 @@ export default function WhatsAppValidatorPage() {
     }
   }
 
-  // ================== VALIDAÇÃO EM LOTE ==================
   const handleTextBatchValidate = async () => {
     if (!batchText.trim()) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Cole ao menos um número.' })
@@ -156,7 +151,6 @@ export default function WhatsAppValidatorPage() {
 
       toast({ title: 'Validação concluída!', description: `Foram processados ${results.length} números.` })
 
-      // Adicionar ao histórico
       addHistoryItem({
         type: 'Em Lote',
         input: `${numbers.length} números`,
@@ -182,7 +176,6 @@ export default function WhatsAppValidatorPage() {
     }
   }
 
-  // ================== AUXILIARES ==================
   const renderStatus = (status: ValidationStatus) => {
     const config = statusConfig[status] || statusConfig.unknown
     return (
@@ -193,16 +186,27 @@ export default function WhatsAppValidatorPage() {
     )
   }
 
+  // ======== EXPORTAÇÃO COM COLUNA LINK ========
   const exportResults = () => {
     if (batchResults.length === 0) return
-    const wsData = [['Número', 'Status'], ...batchResults.map((r) => [r.number, statusMap[r.status]?.label || r.status])]
+    const wsData = [
+      ['Número', 'Status', 'Link'],
+      ...batchResults.map((r) => [
+        r.number,
+        statusMap[r.status]?.label || r.status,
+        `http://wa.me/${r.number}`,
+      ]),
+    ]
     const ws = XLSX.utils.aoa_to_sheet(wsData)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Resultados')
     XLSX.writeFile(wb, `validation_results_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
-  // ================== RENDER ==================
+  // ======== RESULTADOS LIMITADOS ========
+  const displayedResults =
+    displayLimit === 'all' ? batchResults : batchResults.slice(0, displayLimit)
+
   return (
     <div className="min-h-screen bg-background text-foreground py-12 px-4">
       <div className="max-w-4xl mx-auto">
@@ -218,7 +222,7 @@ export default function WhatsAppValidatorPage() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Validação Única */}
+          {/* ===== ÚNICO ===== */}
           <TabsContent value="single">
             <Card className="rounded-xl shadow-lg">
               <CardHeader>
@@ -254,7 +258,7 @@ export default function WhatsAppValidatorPage() {
             </Card>
           </TabsContent>
 
-          {/* Validação em Lote */}
+          {/* ===== LOTE ===== */}
           <TabsContent value="batch">
             <Card className="rounded-xl shadow-lg">
               <CardHeader>
@@ -283,11 +287,29 @@ export default function WhatsAppValidatorPage() {
                 {batchResults.length > 0 && (
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-semibold">Resultados ({batchResults.length})</h3>
-                      <Button variant="outline" size="sm" onClick={exportResults} className="flex items-center gap-2">
-                        <Download className="h-4 w-4"/>
-                        Exportar XLSX
-                      </Button>
+                      <h3 className="text-lg font-semibold">
+                        Resultados ({displayedResults.length}/{batchResults.length})
+                      </h3>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="border rounded-md p-1 text-sm"
+                          value={displayLimit}
+                          onChange={(e) =>
+                            setDisplayLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                          }
+                        >
+                          <option value={10}>10</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value="all">Todos</option>
+                        </select>
+
+                        <Button variant="outline" size="sm" onClick={exportResults} className="flex items-center gap-2">
+                          <Download className="h-4 w-4" />
+                          Exportar XLSX
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="border rounded-lg overflow-hidden shadow-sm">
@@ -296,13 +318,24 @@ export default function WhatsAppValidatorPage() {
                           <TableRow>
                             <TableHead>Número</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead>Link</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {batchResults.map((res, i) => (
+                          {displayedResults.map((res, i) => (
                             <TableRow key={i} className="hover:bg-popover transition-colors">
                               <TableCell className="font-medium">{res.number}</TableCell>
                               <TableCell>{renderStatus(res.status)}</TableCell>
+                              <TableCell>
+                                <a
+                                  href={`http://wa.me/${res.number}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-600 hover:underline flex items-center gap-1"
+                                >
+                                  Abrir <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
