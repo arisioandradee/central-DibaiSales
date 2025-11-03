@@ -6,6 +6,7 @@ from backend.extrair_numero import router as numero_router
 from backend.speedio_assertiva import router as speedio_router
 from backend.transcrever_audio import router as transcrever_router
 from backend.whatsapp_validator import router as whatsapp_validator
+from backend.salesforce import router as salesforce
 
 app = FastAPI(
     title="Central Dibai Sales - Backend",
@@ -18,9 +19,7 @@ app.add_middleware(
     allow_origins=[
         "https://central-dibai-sales.vercel.app",
         "https://central-dibaisales.onrender.com",
-        "http://localhost:3000",
-        "https://server.dibaisales.com.br",
-        "http://server.dibaisales.com.br"
+        "http://localhost:3000"
     ],
     allow_credentials=True, 
     allow_methods=["*"],
@@ -33,3 +32,4 @@ app.include_router(numero_router, prefix="/api", tags=["Extrator de Números"])
 app.include_router(speedio_router, prefix="/api", tags=["Speedio / Assertiva"])
 app.include_router(transcrever_router, prefix="/api", tags=["Transcritor de Áudios"])
 app.include_router(whatsapp_validator, prefix="/api", tags=["Whatsapp Validator"] )
+app.include_router(salesforce, prefix="/api", tags=["Conversor Salesforce"])
