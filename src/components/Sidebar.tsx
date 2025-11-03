@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { Home, MailCheck, Sheet as SheetIcon, Users, Mic, FileSpreadsheet, Mails, Phone, Headset, Smartphone} from 'lucide-react'
+import { Home, MailCheck, Sheet as SheetIcon, Users, Mic, FileSpreadsheet, Mails, Phone, Headset, Smartphone, FileCheck} from 'lucide-react'
 
 interface SidebarProps {
   className?: string
@@ -9,29 +9,31 @@ interface SidebarProps {
 
 const navigation = [
   { name: 'Dibai Hub', href: '/', icon: Home },
-  { name: 'Validador de E-mail', 
-    href: '/email-validator', 
-    icon: MailCheck },
-  /*{
-    name: 'Extrator de E-mails',
-    href: '/extrator-email',
-    icon: Mails,
-  },*/
-  {
-    name: 'Extrator de Números',
-    href: '/extrator-numero',
-    icon: Phone,
-  },
   {
     name: 'CRM Builder',
     href: '/spreadsheet-converter',
     icon: FileSpreadsheet,
   }, 
-  /*{
-    name: 'Speedio/Assertiva',
-    href: '/speedio-assertiva-converter',
-    icon: SheetIcon,
-  },*/
+  {
+    name: 'Salesforce Builder',
+    href: '/salesforce',
+    icon: FileCheck,
+  },
+
+  { name: 'Validador de E-mail', 
+    href: '/email-validator', 
+    icon: MailCheck 
+  },
+  {
+    name: 'Validador de Whatsapp',
+    href: '/whatsapp-validator',
+    icon: Smartphone,
+  },
+  {
+    name: 'Extrator de Números',
+    href: '/extrator-numero',
+    icon: Phone,
+  },
   {
     name: 'Transcritor de Áudios',
     href: '/audio-transcriber',
@@ -42,11 +44,8 @@ const navigation = [
     href: 'https://ia-dibaisales.vercel.app/',
     icon: Headset,
   },
-  {
-    name: 'Validador de Whatsapp',
-    href: '/whatsapp-validator',
-    icon: Smartphone,
-  },
+
+
 ]
 
 export function Sidebar({ className, onLinkClick }: SidebarProps) {

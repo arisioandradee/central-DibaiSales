@@ -6,5 +6,6 @@ export const ENDPOINTS = {
   extratorNumero: `${BASE_URL}/extrator-numero`,
   speedioAssertiva: `${BASE_URL}/speedio_assertiva`,
   transcreverAudios: `${BASE_URL}/transcrever_audios`,
-  whatsappValidator: `${BASE_URL}/whatsapp_validator`
+  whatsappValidator: `${BASE_URL}/whatsapp_validator`,
+  salesforce: `${BASE_URL}/salesforce`
 };

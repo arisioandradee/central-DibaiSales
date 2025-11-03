@@ -17,7 +17,9 @@ import {
   Smartphone,
   ArrowRight, 
   Search, 
-  History
+  History,
+  FileCheck,
+  Construction
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { EmailValidatorHistory } from '@/components/EmailValidatorHistory'
@@ -58,11 +60,35 @@ export default function Index() {
 
   const tools = [
     {
+      title: 'CRM Builder',
+      description: 'Transforme leads brutos em 5 arquivos Excel formatados para sistemas CRM.',
+      icon: FileSpreadsheet,
+      actions: [
+        { to: '/spreadsheet-converter', text: 'Converter Planilha', icon: ArrowRight },
+      ],
+    },
+      {
+      title: 'Salesforce Builder',
+      description: 'Transforme uma planilha para o formato Salesforce.',
+      icon: FileCheck,
+      actions: [
+        { to: '/salesforce', text: 'Acessar Conversor', icon: ArrowRight},
+      ],
+    },
+    {
       title: 'Validador de E-mail',
       description: 'Verifique e-mails individualmente ou em lote para garantir a qualidade dos leads.',
       icon: MailCheck,
       actions: [
         { to: '/email-validator', text: 'Acessar Validador', icon: ArrowRight },
+      ],
+    },
+    {
+      title: 'Validador de Whatsapp',
+      description: 'Valide números de WhatsApp rapidamente e garanta que seus contatos estão ativos.',
+      icon: Smartphone,
+      actions: [
+        { to: '/whatsapp-validator', text: 'Acessar Validador', icon: ArrowRight},
       ],
     },
     {
@@ -73,14 +99,7 @@ export default function Index() {
         { to: '/extrator-numero', text: 'Acessar Extrator', icon: ArrowRight },
       ],
     },
-    {
-      title: 'CRM Builder',
-      description: 'Transforme leads brutos em 5 arquivos Excel formatados para sistemas CRM.',
-      icon: FileSpreadsheet,
-      actions: [
-        { to: '/spreadsheet-converter', text: 'Converter Planilha', icon: ArrowRight },
-      ],
-    },
+
     {
       title: 'Transcritor de Áudios',
       description: 'Converta arquivos de áudio de reuniões ou chamadas em texto de forma instantânea.',
@@ -98,24 +117,27 @@ export default function Index() {
       ],
     },
     {
-      title: 'Validador de Whatsapp',
-      description: 'Valide números de WhatsApp rapidamente e garanta que seus contatos estão ativos.',
-      icon: Smartphone,
+      title: 'Em Breve',
+      description: 'Próxima ferramenta em desenvolvimento.',
+      icon: Construction,
       actions: [
-        { to: '/whatsapp-validator', text: 'Acessar Validador', icon: ArrowRight},
+        { 
+          to: '#', 
+          text: 'Em Breve', 
+          icon: ArrowRight, 
+          disabled: true,  
+          variant: 'secondary'
+        },
       ],
-    },
+    }
   ]
 
-  // Filtra as ferramentas de acordo com o termo de busca
   const filteredTools = tools.filter(tool =>
     tool.title.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
     <div className="flex flex-1 flex-col gap-12 p-4 md:p-12 bg-background">
-      
-      {/* 1. SEÇÃO DE CABEÇALHO E BUSCA */}
       <header className="max-w-6xl mx-auto w-full text-center">
         <h1 className="text-5xl md:text-6xl font-extrabold tracking-tighter text-foreground mb-3">
           Central <span className="text-primary">Dibai Sales</span>
@@ -143,7 +165,7 @@ export default function Index() {
           Ferramentas
         </h2>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {filteredTools.map((tool) => (
             <Card
               key={tool.title}

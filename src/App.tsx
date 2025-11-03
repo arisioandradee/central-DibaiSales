@@ -14,6 +14,7 @@ import AudioTranscriber from './pages/AudioTranscriber'
 import SpeedioAssertivaConverter from './pages/SpeedioAssertivaConverter'
 import ExtratorNumero from './pages/ExtratorNumero'
 import WhatsappValidator from './pages/WhatsappValidator'
+import Salesforce from './pages/Salesforce'
 
 const App = () => (
   <BrowserRouter
@@ -50,6 +51,10 @@ const App = () => (
             <Route
               path="/whatsapp-validator"
               element={<WhatsappValidator />}
+            />
+            <Route
+              path="/salesforce"
+              element={<Salesforce />}
             />
           </Route>
           <Route path="*" element={<NotFound />} />
