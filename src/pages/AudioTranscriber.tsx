@@ -23,7 +23,8 @@ export default function ExcelTranscriber() {
   const [convertedBlob, setConvertedBlob] = useState<Blob | null>(null)
   const { toast } = useToast()
 
-  const DOWNLOAD_FILENAME = 'relatorio.pdf'
+  // novo nome do arquivo gerado
+  const DOWNLOAD_FILENAME = 'relatorios_transcricoes.zip'
 
   const handleDownload = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob)
@@ -43,7 +44,7 @@ export default function ExcelTranscriber() {
     setConvertedBlob(null)
 
     const API_URL = ENDPOINTS.transcreverAudios
-    
+
     const formData = new FormData()
     formData.append('file', file)
 
@@ -72,8 +73,9 @@ export default function ExcelTranscriber() {
         return
       }
 
-      const fileBlob = await response.blob()
-      setConvertedBlob(fileBlob)
+      // agora a API retorna um ZIP contendo 2 PDFs
+      const zipBlob = await response.blob()
+      setConvertedBlob(zipBlob)
       setStatus('success')
 
       toast({
@@ -114,7 +116,7 @@ export default function ExcelTranscriber() {
               Processamento concluído!
             </AlertTitle>
             <AlertDescription className="text-success-foreground">
-              Seu PDF com o resumo das transcrições está pronto para download: <b>{DOWNLOAD_FILENAME}</b>.
+              Seu arquivo ZIP com os dois PDFs está pronto para download: <b>{DOWNLOAD_FILENAME}</b>.
             </AlertDescription>
           </Alert>
         )
@@ -145,7 +147,7 @@ export default function ExcelTranscriber() {
               A planilha deve conter as colunas: <b>ID, Atendente, Gravação</b> (entre outras).
             </CardDescription>
             <p className="text-xs text-muted-foreground mt-3">
-              O sistema irá baixar os áudios, transcrever usando Gemini e gerar um PDF resumo.
+              O sistema irá baixar os áudios, transcrever usando Gemini e gerar um ZIP com dois PDFs (modelo padrão e análise BANT).
             </p>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
@@ -178,7 +180,7 @@ export default function ExcelTranscriber() {
                   className="w-full h-12 text-lg font-semibold bg-success hover:bg-success/90 text-success-foreground transition-transform duration-200 hover:scale-[1.01] mt-4 shadow-lg shadow-success/50"
                 >
                   <Download className="mr-2 h-5 w-5" />
-                  Baixar PDF ({DOWNLOAD_FILENAME})
+                  Baixar ZIP ({DOWNLOAD_FILENAME})
                 </Button>
               )}
 
