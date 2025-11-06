@@ -148,7 +148,7 @@ def gerar_bant_analise(transcricao_texto):
     try:
         model = genai.GenerativeModel("models/gemini-2.5-pro")
         prompt_bant = (
-            "Você é um Consultor de Vendas Sênior e especialista na metodologia BANT..."
+            "Você é um Consultor de Vendas Sênior e especialista na metodologia BANT. "
             "Analise a conversa abaixo e elabore uma análise BANT completa e estruturada.\n\n"
             f"--- TRANSCRIÇÃO ---\n{transcricao_texto}\n\n--- SAÍDA ---"
         )
@@ -175,10 +175,12 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Excel deve conter 'GRAVAÇÃO', 'ID', 'ATENDENTE'.")
 
         async def processar_linha(row):
-            link = str(link).strip()
-            link, call_id, atendente = row["GRAVAÇÃO"], str(row["ID"]), str(row[COLUNA_ATENDENTE.upper()])
+            link = str(row["GRAVAÇÃO"]).strip()
+            call_id = str(row["ID"])
+            atendente = str(row[COLUNA_ATENDENTE.upper()])
+
             if not link.startswith("http"):
-                return None
+                return {"ID": call_id, "ATENDENTE": atendente, "STATUS": "Link inválido"}
 
             nome_arquivo = os.path.join(PASTA_TEMP, f"{call_id}.mp3")
             loop = asyncio.get_event_loop()
