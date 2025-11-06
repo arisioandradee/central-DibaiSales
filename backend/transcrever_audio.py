@@ -175,6 +175,7 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Excel deve conter 'GRAVAÇÃO', 'ID', 'ATENDENTE'.")
 
         async def processar_linha(row):
+            link = str(link).strip()
             link, call_id, atendente = row["GRAVAÇÃO"], str(row["ID"]), str(row[COLUNA_ATENDENTE.upper()])
             if not link.startswith("http"):
                 return None
