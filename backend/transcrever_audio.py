@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 import asyncio
 from functools import partial
 import mimetypes
-import zipfile
 
 # ------------------ CARREGA .ENV ------------------
 load_dotenv()
@@ -21,6 +20,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY não encontrada. Verifique seu arquivo .env")
 
+# Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 print("[API] Conexão com Gemini OK")
 
@@ -31,7 +31,7 @@ PASTA_TEMP = "audios_temp"
 
 router = APIRouter()
 
-# ------------------ CLASSE PDF TRANSCRIÇÕES ------------------
+# ------------------ CLASSE PDF ------------------
 class PDF(FPDF):
     def header(self):
         self.set_fill_color(220, 220, 220)
@@ -46,122 +46,150 @@ class PDF(FPDF):
         self.set_text_color(100, 100, 100)
         self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
 
-    def write_long_transcription_block(self, call_id, atendente, link, transcricao):
+    def write_long_transcription_block(self, call_id: str, atendente: str, link: str, transcricao: str):
+        print(f"[PDF] Adicionando transcrição longa para ID: {call_id}")
         self.set_font("Arial", "B", 14)
+        self.set_text_color(20, 20, 20)
         self.cell(0, 8, f"ID: {call_id}", 0, 1, "L")
+        self.ln(1)
+
         self.set_font("Arial", "I", 10)
-        self.cell(0, 6, f"Atendente: {atendente}", 0, 1, "L")
+        self.set_text_color(80, 80, 80)
+        self.cell(0, 5, f"Atendente: {atendente}", 0, 1, "L")
         self.multi_cell(0, 5, f"Link: {link}", 0, "L")
         self.ln(5)
+
         self.set_font("Arial", "", 10)
+        self.set_text_color(0, 0, 0)
         self.multi_cell(0, 5, transcricao)
         self.ln(10)
 
-    def write_summary_block(self, curtas):
+    def _draw_summary_header(self, W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT):
+        self.set_font("Arial", "B", 10)
+        self.set_fill_color(240, 240, 240)
+        self.cell(W_ID, LINE_HEIGHT, "ID", 1, 0, "C", fill=True)
+        self.cell(W_ATENDENTE, LINE_HEIGHT, "ATENDENTE", 1, 0, "C", fill=True)
+        self.cell(W_STATUS, LINE_HEIGHT, "STATUS / RESUMO", 1, 1, "C", fill=True)
+        self.set_font("Arial", "", 9)
+        self.set_text_color(0, 0, 0)
+
+    def write_summary_block(self, curtas: list[dict]):
+        print("[PDF] Adicionando resumo de chamadas curtas/falhas")
         self.add_page()
         self.set_font("Arial", "B", 18)
         self.set_text_color(200, 40, 40)
         self.cell(0, 10, "Resumo de Chamadas Curtas ou Falhas", 0, 1, "C")
         self.ln(10)
 
-        self.set_font("Arial", "B", 10)
+        W_ID = 35
+        W_ATENDENTE = 40
+        W_STATUS = 125
+        LINE_HEIGHT = 6
+
         self.set_fill_color(240, 240, 240)
-        self.cell(35, 6, "ID", 1, 0, "C", fill=True)
-        self.cell(40, 6, "ATENDENTE", 1, 0, "C", fill=True)
-        self.cell(115, 6, "STATUS / RESUMO", 1, 1, "C", fill=True)
+        self._draw_summary_header(W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT)
 
-        self.set_font("Arial", "", 9)
+        PB_TRIGGER = self.page_break_trigger
+        MIN_ROW_HEIGHT = LINE_HEIGHT * 3
+
         for item in curtas:
-            self.cell(35, 6, item["ID"], 1)
-            self.cell(40, 6, item["ATENDENTE"], 1)
-            self.multi_cell(115, 6, item["STATUS"], 1)
-        self.ln(5)
+            status_text = item["STATUS"]
+            if self.get_y() + MIN_ROW_HEIGHT > PB_TRIGGER:
+                self.add_page()
+                self._draw_summary_header(W_ID, W_ATENDENTE, W_STATUS, LINE_HEIGHT)
 
-# ------------------ CLASSE PDF BANT ------------------
-class PDF_BANT(FPDF):
-    def header(self):
-        self.set_fill_color(220, 235, 250)
-        self.set_font("Arial", "B", 12)
-        self.cell(0, 7, "Análise BANT - Central Dibai Sales", 0, 1, "C", fill=True)
-        self.ln(5)
+            start_y = self.get_y()
+            start_x = self.get_x()
 
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Arial", "I", 8)
-        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+            self.set_xy(start_x + W_ID + W_ATENDENTE, start_y)
+            self.multi_cell(W_STATUS, LINE_HEIGHT, status_text, 0, "L")
+            end_y = self.get_y()
+            final_height = max(LINE_HEIGHT, end_y - start_y)
+            v_offset = (final_height - LINE_HEIGHT) / 2
 
-    def write_bant_analysis(self, call_id, atendente, bant_texto):
-        self.add_page()
-        self.set_font("Arial", "B", 12)
-        self.cell(0, 8, f"ID: {call_id}", 0, 1, "L")
-        self.set_font("Arial", "I", 10)
-        self.cell(0, 6, f"Atendente: {atendente}", 0, 1, "L")
-        self.ln(4)
-        self.set_font("Arial", "", 10)
-        self.multi_cell(0, 5, bant_texto)
-        self.ln(8)
+            self.set_xy(start_x, start_y)
+            self.cell(W_ID, final_height, "", 1, 0)
+            self.set_xy(start_x, start_y + v_offset)
+            self.cell(W_ID, LINE_HEIGHT, item["ID"], 0, 0, "C")
+
+            self.set_xy(start_x + W_ID, start_y)
+            self.cell(W_ATENDENTE, final_height, "", 1, 0)
+            self.set_xy(start_x + W_ID, start_y + v_offset)
+            self.cell(W_ATENDENTE, LINE_HEIGHT, item["ATENDENTE"], 0, 0, "C")
+
+            self.set_xy(start_x + W_ID + W_ATENDENTE, start_y)
+            self.cell(W_STATUS, final_height, "", 1, 1, "L")
+            self.set_y(end_y)
 
 # ------------------ FUNÇÕES AUXILIARES ------------------
 def baixar_audio(link_gravacao, nome_arquivo_saida):
     try:
+        print(f"[DOWNLOAD] Baixando áudio: {link_gravacao}")
         r = requests.get(link_gravacao, stream=True, timeout=30)
         if r.status_code == 200:
             with open(nome_arquivo_saida, "wb") as f:
                 for chunk in r.iter_content(8192):
                     f.write(chunk)
+            print(f"[DOWNLOAD] Sucesso: {nome_arquivo_saida}")
             return True
+        print(f"[DOWNLOAD] Falha HTTP {r.status_code}")
         return f"Erro: HTTP {r.status_code}"
     except Exception as e:
-        return f"Erro de conexão: {e}"
+        print(f"[DOWNLOAD] Erro: {e}")
+        return f"Erro de conexão: {str(e)}"
 
 def duracao_audio_segundos(caminho):
     try:
         audio = MutagenFile(caminho)
-        return audio.info.length if audio and hasattr(audio, "info") else 0
+        if audio is None or not hasattr(audio, "info"):
+            return 0
+        return audio.info.length
     except Exception:
         return 0
 
 def transcrever_audio(caminho):
     try:
-        model = genai.GenerativeModel("models/gemini-2.5-pro")
+        model = genai.GenerativeModel("models/gemini-2.5-pro")  
+
         mime_type, _ = mimetypes.guess_type(caminho)
         if not mime_type:
             mime_type = "audio/mpeg"
+
         with open(caminho, "rb") as f:
             audio_bytes = f.read()
+
+        # ✅ formato correto para enviar áudio e prompt
         response = model.generate_content(
             [
                 {
                     "role": "user",
                     "parts": [
-                        "Transcreva o áudio completo em Português (Brasil)...",
-                        {"mime_type": mime_type, "data": audio_bytes},
+                        "Transcreva o áudio completo em Português do Brasil. "
+                        "Identifique os locutores pelo nome real se possível. "
+                        "Formate como diálogo assim: 'Nome: fala do participante'. "
+                        "Evite linhas longas e remova espaços extras desnecessários.",
+                        {
+                            "mime_type": mime_type,
+                            "data": audio_bytes,
+                        },
                     ],
                 }
             ]
         )
-        return response.text.strip() if hasattr(response, "text") else ""
-    except Exception as e:
-        return f"ERRO: {str(e)}"
 
-def gerar_bant_analise(transcricao_texto):
-    try:
-        model = genai.GenerativeModel("models/gemini-2.5-pro")
-        prompt_bant = (
-            "Você é um Consultor de Vendas Sênior e especialista na metodologia BANT. "
-            "Analise a conversa abaixo e elabore uma análise BANT completa e estruturada.\n\n"
-            f"--- TRANSCRIÇÃO ---\n{transcricao_texto}\n\n--- SAÍDA ---"
-        )
-        response = model.generate_content(prompt_bant)
-        return response.text.strip() if hasattr(response, "text") else "Falha na análise BANT."
+        texto = response.text.strip() if response and hasattr(response, "text") else ""
+        return texto
+
     except Exception as e:
-        return f"ERRO BANT: {str(e)}"
+        print(f"[TRANSCRICAO] Erro: {e}")
+        return f"ERRO na Transcrição: {type(e).__name__}: {str(e)}"
 
 # ------------------ ENDPOINT ------------------
 @router.post("/transcrever_audios")
 async def transcrever_audios_endpoint(file: UploadFile = File(...)):
+    print("[API] Recebendo arquivo Excel...")
     resultados_longos = []
-    resultados_curtos = []
+    resultados_curtos_resumo = []
 
     os.makedirs(PASTA_TEMP, exist_ok=True)
 
@@ -169,83 +197,96 @@ async def transcrever_audios_endpoint(file: UploadFile = File(...)):
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
         df.columns = df.columns.str.strip().str.upper()
+        print(f"[API] Excel carregado com {len(df)} linhas")
 
         colunas_requeridas = ["GRAVAÇÃO", "ID", COLUNA_ATENDENTE.upper()]
         if not all(col in df.columns for col in colunas_requeridas):
-            raise HTTPException(status_code=400, detail="Excel deve conter 'GRAVAÇÃO', 'ID', 'ATENDENTE'.")
+            raise HTTPException(status_code=400, detail=f"O Excel deve conter as colunas 'GRAVAÇÃO', 'ID' e '{COLUNA_ATENDENTE}'.")
 
         async def processar_linha(row):
-            link = str(row["GRAVAÇÃO"]).strip()
+            link = row["GRAVAÇÃO"]
             call_id = str(row["ID"])
-            atendente = str(row[COLUNA_ATENDENTE.upper()])
+            atendente_nome = str(row[COLUNA_ATENDENTE.upper()])
 
-            if not link.startswith("http"):
-                return {"ID": call_id, "ATENDENTE": atendente, "STATUS": "Link inválido"}
+            if not isinstance(link, str) or not link.startswith("http"):
+                print(f"[SKIP] Linha {row['ID']} inválida: {link}")
+                return None
 
             nome_arquivo = os.path.join(PASTA_TEMP, f"{call_id}.mp3")
             loop = asyncio.get_event_loop()
 
             resultado_download = await loop.run_in_executor(None, partial(baixar_audio, link, nome_arquivo))
             if resultado_download is not True:
-                return {"ID": call_id, "ATENDENTE": atendente, "STATUS": resultado_download}
+                return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": resultado_download}
 
             duracao = await loop.run_in_executor(None, partial(duracao_audio_segundos, nome_arquivo))
             if duracao < 30:
-                return {"ID": call_id, "ATENDENTE": atendente, "STATUS": "Áudio muito curto (<30s)"}
+                try:
+                    os.remove(nome_arquivo)
+                except Exception:
+                    pass
+                return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": "Áudio muito curto (<30s)"}
 
             transcricao_texto = await loop.run_in_executor(None, partial(transcrever_audio, nome_arquivo))
-            os.remove(nome_arquivo)
+            await asyncio.sleep(1)
 
-            if not transcricao_texto or len(transcricao_texto) < LIMITE_TRANSCRICAO_CURTA:
-                return {"ID": call_id, "ATENDENTE": atendente, "STATUS": "Transcrição curta"}
+            try:
+                os.remove(nome_arquivo)
+            except Exception:
+                pass
+
+            if isinstance(transcricao_texto, str) and transcricao_texto.startswith("ERRO na Transcrição"):
+                return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": transcricao_texto}
+            elif not isinstance(transcricao_texto, str) or len(transcricao_texto) < LIMITE_TRANSCRICAO_CURTA:
+                resumo_curto = (str(transcricao_texto).replace('\n', ' ').strip()[:70] + "...") if transcricao_texto else "Transcrição vazia"
+                return {"ID": call_id, "ATENDENTE": atendente_nome, "STATUS": f"CURTA: {resumo_curto}"}
             else:
-                return {"LONGO": {"ID": call_id, "ATENDENTE": atendente, "LINK": link, "TRANSCRICAO": transcricao_texto}}
+                return {"LONGO": {"ID": call_id, "ATENDENTE": atendente_nome, "LINK": link, "TRANSCRICAO": transcricao_texto}}
 
-        tasks = [processar_linha(row) for _, row in df.iterrows()]
+        SEMAFORO = asyncio.Semaphore(5)
+
+        async def sem_task(row):
+            async with SEMAFORO:
+                return await processar_linha(row)
+
+        tasks = [sem_task(row) for _, row in df.iterrows()]
         resultados = await asyncio.gather(*tasks)
 
         for r in resultados:
-            if not r:
+            if r is None:
                 continue
             if "LONGO" in r:
                 resultados_longos.append(r["LONGO"])
             else:
-                resultados_curtos.append(r)
+                resultados_curtos_resumo.append(r)
 
-        # PDF Transcrições
-        pdf_transc = PDF()
-        pdf_transc.alias_nb_pages()
-        pdf_transc.set_auto_page_break(auto=True, margin=15)
+        print("[PDF] Gerando PDF final...")
+        pdf = PDF(orientation='P', unit='mm', format='A4')
+        pdf.alias_nb_pages()
+        pdf.set_auto_page_break(auto=True, margin=15)
+
         for item in resultados_longos:
-            pdf_transc.add_page()
-            pdf_transc.write_long_transcription_block(item["ID"], item["ATENDENTE"], item["LINK"], item["TRANSCRICAO"])
-        if resultados_curtos:
-            pdf_transc.write_summary_block(resultados_curtos)
-        pdf_transc_output = os.path.join(PASTA_TEMP, "transcricoes.pdf")
-        pdf_transc.output(pdf_transc_output)
+            pdf.add_page()
+            pdf.write_long_transcription_block(
+                call_id=item["ID"],
+                atendente=item["ATENDENTE"],
+                link=item["LINK"],
+                transcricao=item["TRANSCRICAO"]
+            )
 
-        # PDF BANT
-        pdf_bant = PDF_BANT()
-        pdf_bant.alias_nb_pages()
-        pdf_bant.set_auto_page_break(auto=True, margin=15)
-        for item in resultados_longos:
-            analise = await asyncio.get_event_loop().run_in_executor(None, partial(gerar_bant_analise, item["TRANSCRICAO"]))
-            pdf_bant.write_bant_analysis(item["ID"], item["ATENDENTE"], analise)
-        pdf_bant_output = os.path.join(PASTA_TEMP, "analise_bant.pdf")
-        pdf_bant.output(pdf_bant_output)
+        if resultados_curtos_resumo:
+            pdf.write_summary_block(resultados_curtos_resumo)
 
-        # ZIP final
-        zip_path = os.path.join(PASTA_TEMP, "resultado.zip")
-        with zipfile.ZipFile(zip_path, "w") as zipf:
-            zipf.write(pdf_transc_output, "transcricoes.pdf")
-            zipf.write(pdf_bant_output, "analise_bant.pdf")
+        pdf_output = bytes(pdf.output(dest='S'))
+        print("[PDF] PDF gerado com sucesso!")
 
         return StreamingResponse(
-            open(zip_path, "rb"),
-            media_type="application/zip",
-            headers={"Content-Disposition": "attachment; filename=resultado.zip"}
+            io.BytesIO(pdf_output),
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=transcricoes_relatorio.pdf"}
         )
 
     finally:
         if os.path.exists(PASTA_TEMP):
             shutil.rmtree(PASTA_TEMP)
+            print("[TEMP] Pasta temporária removida")
