@@ -25,7 +25,6 @@ type BatchResult = {
   sub_status: string
 }
 
-// Configurações de status
 const statusConfig: Record<ValidationStatus, { icon: React.ElementType; color: string; label: string }> = {
   valid: { icon: CheckCircle, color: 'text-green-400', label: 'Válido' },
   invalid: { icon: XCircle, color: 'text-red-500', label: 'Inválido' },
@@ -46,10 +45,10 @@ export default function EmailValidatorPage() {
   const [isBatchLoading, setIsBatchLoading] = useState(false)
   const [batchProgress, setBatchProgress] = useState(0)
   const [showFileUpload, setShowFileUpload] = useState(false)
+  const [displayLimit, setDisplayLimit] = useState<number | 'all'>(10)
 
   const { toast } = useToast()
 
-  // ================== Função para salvar histórico no localStorage ==================
   const saveHistory = (item: any) => {
     const saved = JSON.parse(localStorage.getItem('emailHistory') || '[]')
     const newItem = {
@@ -70,7 +69,6 @@ export default function EmailValidatorPage() {
     )
   }
 
-  // ================== Validação Única ==================
   const handleSingleValidate = async () => {
     if (!singleEmail || !API_KEY) {
       toast({
@@ -108,7 +106,6 @@ export default function EmailValidatorPage() {
     }
   }
 
-  // ================== Validação em Lote ==================
   const handleTextBatchValidate = async () => {
     if (!batchText.trim() || !API_KEY) {
       toast({ variant: 'destructive', title: 'Erro', description: !API_KEY ? 'Chave da API não configurada' : 'Cole ao menos um e-mail.' })
@@ -179,6 +176,9 @@ export default function EmailValidatorPage() {
     XLSX.writeFile(wb, `validation_results_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
+  // Exibe apenas a quantidade escolhida
+  const displayedResults = displayLimit === 'all' ? batchResults : batchResults.slice(0, displayLimit)
+
   return (
     <div className="min-h-screen bg-background text-foreground py-12 px-4">
       <div className="max-w-4xl mx-auto">
@@ -190,6 +190,7 @@ export default function EmailValidatorPage() {
             <TabsTrigger value="batch" className="rounded-full px-6 py-2 data-[state=active]:bg-indigo-500 data-[state=active]:text-white transition">Validação em Lote</TabsTrigger>
           </TabsList>
 
+          {/* ===== ÚNICO ===== */}
           <TabsContent value="single">
             <Card className="rounded-xl shadow-lg">
               <CardHeader>
@@ -222,6 +223,7 @@ export default function EmailValidatorPage() {
             </Card>
           </TabsContent>
 
+          {/* ===== LOTE ===== */}
           <TabsContent value="batch">
             <Card className="rounded-xl shadow-lg">
               <CardHeader>
@@ -250,10 +252,47 @@ export default function EmailValidatorPage() {
                 {batchResults.length > 0 && (
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-semibold">Resultados ({batchResults.length})</h3>
-                      <Button variant="outline" size="sm" onClick={exportResults} className="flex items-center gap-2">
-                        <Download className="h-4 w-4" /> Exportar XLSX
-                      </Button>
+                      <h3 className="text-lg font-semibold">
+                        Resultados ({displayedResults.length}/{batchResults.length})
+                      </h3>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="border border-border rounded-md px-2 py-1 text-sm bg-background text-foreground hover:bg-accent/20 transition-colors"
+                          value={displayLimit}
+                          onChange={(e) =>
+                            setDisplayLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                          }
+                        >
+                          <option value={10}>10</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value="all">Todos</option>
+                        </select>
+
+                        <Button variant="outline" size="sm" onClick={exportResults} className="flex items-center gap-2">
+                          <Download className="h-4 w-4" /> Exportar XLSX
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border rounded-lg overflow-hidden shadow-sm">
+                      <table className="w-full text-sm">
+                        <thead className="bg-popover">
+                          <tr>
+                            <th className="text-left p-2">E-mail</th>
+                            <th className="text-left p-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displayedResults.map((res, i) => (
+                            <tr key={i} className="hover:bg-popover transition-colors">
+                              <td className="p-2 font-medium">{res.email}</td>
+                              <td className="p-2">{renderStatus(res.status)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
